@@ -20,6 +20,20 @@ npm run dev
 
 GitHub Actions запускает линтер, тесты и сборку при пуше в `main` и в pull request с целью `main`.
 
+### Скриншотные тесты
+
+`npm run test:visual` сравнивает интерфейс с PNG-эталонами в `visual/snapshots/desktop/` и `visual/snapshots/mobile/`. Для каждого размера проверяются анкета, подборка, пустой поиск и разбор ответа в самопроверке. При расхождении GitHub Actions прикладывает артефакт `visual-test-results`.
+
+Сравнивай и обновляй эталоны в том же образе Linux, что и GitHub Actions. Из корня проекта запусти команду ниже. Для обновления после согласованного изменения интерфейса замени `test:visual` на `test:visual:update`, проверь PNG и закоммить их.
+
+```sh
+docker run --rm --platform linux/amd64 --init --ipc=host \
+  --mount type=bind,source="$PWD",target=/project \
+  --mount type=volume,target=/project/node_modules \
+  --workdir /project mcr.microsoft.com/playwright:v1.64.1-noble \
+  sh -c 'npm ci && npm run test:visual'
+```
+
 ## Тема
 
 Тема подключается через `ChakraProvider` в `src/main.tsx` и настраивается в `src/theme.ts`.
