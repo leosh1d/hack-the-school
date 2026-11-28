@@ -9,7 +9,10 @@ const button = (name: string) => screen.getByRole('button', { name })
 const checkbox = (name: string) => screen.getByRole('checkbox', { name })
 const next = (user: User) => user.click(button('Дальше'))
 
-beforeEach(() => localStorage.clear())
+beforeEach(() => {
+  localStorage.clear()
+  window.history.replaceState(null, '', '/')
+})
 
 test('проходит несколько направлений, раскрывает ML и NLP и редактирует интересы', async () => {
   const user = userEvent.setup()
@@ -93,14 +96,31 @@ test('для двух направлений предлагает один пр�
   expect(recommendations.getByText(/Другой ракурс/)).toBeVisible()
 })
 
-test('учитывает свой интерес и сообщает о темах без совпадения', async () => {
+test('учитывает интерес из чата, сохраняет выбранное направление и показывает отсутствие совпадений', async () => {
   const user = userEvent.setup()
   renderWithChakra(<App />)
-  await user.click(button('Добавить свой интерес'))
-  const input = screen.getByRole('textbox', { name: 'Свой интерес' })
+  await user.click(checkbox('Данные и визуализация'))
+  await user.click(screen.getByRole('link', { name: 'Расскажу в чате' }))
+  const heading = await screen.findByRole('heading', { name: 'Чат по факультативам', level: 1 })
+  expect(heading).toHaveFocus()
+  expect(window.location.hash).toBe('#/chat')
+  const input = screen.getByRole('textbox', { name: 'Запрос по каталогу' })
   await user.type(input, 'исследовательские интервью{Enter}')
-  await user.type(input, 'архитектура марсианских станций{Enter}')
-  await user.click(button('Уже показать подборку'))
+  button('Учесть в подборке').focus()
+  await user.keyboard('{Enter}')
+  expect(screen.getByText('Учтено в подборке')).toBeVisible()
+  expect(input).toHaveFocus()
+  await user.click(button('К анкете'))
+
+  expect(await screen.findByRole('checkbox', { name: 'Данные и визуализация' })).toBeChecked()
+  expect(button('Удалить интерес исследовательские интервью')).toBeVisible()
+
+  await user.click(screen.getByRole('link', { name: 'Расскажу в чате' }))
+  expect(await screen.findByText('исследовательские интервью', { exact: true })).toBeVisible()
+  await user.type(screen.getByRole('textbox', { name: 'Запрос по каталогу' }), 'архитектура марсианских станций{Enter}')
+  await user.click(button('Учесть в подборке'))
+  await user.click(button('К анкете'))
+  await user.click(await screen.findByRole('button', { name: 'Уже показать подборку' }))
   expect(await screen.findByRole('article', { name: /Первый выход в поле/ })).toBeVisible()
   expect(screen.getByText(/марсианских станций.*пока нет совпадений/)).toBeVisible()
   await user.click(button('Изменить интересы'))
@@ -108,11 +128,30 @@ test('учитывает свой интерес и сообщает о тема
   expect(screen.queryByRole('button', { name: /Удалить интерес архитектура/ })).not.toBeInTheDocument()
 })
 
+test('из прямой ссылки на чат возвращается к анкете с сохранёнными интересами', async () => {
+  const user = userEvent.setup()
+  const initial = renderWithChakra(<App />)
+  await user.click(checkbox('Данные и визуализация'))
+  await user.click(button('Уже показать подборку'))
+  expect(await screen.findByRole('region', { name: 'Рекомендации' })).toBeVisible()
+  initial.unmount()
+
+  window.history.replaceState(null, '', '/#/chat')
+  renderWithChakra(<App />)
+  expect(screen.getByRole('heading', { name: 'Чат по факультативам' })).toBeVisible()
+  await user.click(button('К анкете'))
+  expect(window.location.hash).toBe('')
+  expect(screen.getByRole('heading', { name: 'Что тебе интересно?' })).toHaveFocus()
+  expect(checkbox('Данные и визуализация')).toBeChecked()
+})
+
 test('открывает подборку для знакомства без ответов', async () => {
   const user = userEvent.setup()
   renderWithChakra(<App />)
   await user.click(button('Посмотреть разные темы'))
   const recommended = within(await screen.findByRole('region', { name: 'Рекомендации' }))
+  expect(screen.queryByRole('heading', { name: 'Уточнить запрос' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('search')).not.toBeInTheDocument()
   expect(recommended.getAllByRole('article')).toHaveLength(4)
   expect(screen.queryByText(/Запись открыта|Дедлайн записи/)).not.toBeInTheDocument()
 })
@@ -122,6 +161,8 @@ test('находит официальный курс в каталоге и со
   renderWithChakra(<App />)
   await user.click(button('Каталог'))
   const official = within(await screen.findByRole('region', { name: 'Курсы ВШЭ' }))
+  expect(screen.getByRole('heading', { name: 'Каталог факультативов', level: 1 })).toBeVisible()
+  expect(screen.queryByText('Hack the School · прототип')).not.toBeInTheDocument()
   expect(official.getAllByRole('article')).toHaveLength(6)
   await user.click(button('Показать ещё'))
   expect(official.getAllByRole('article')).toHaveLength(12)

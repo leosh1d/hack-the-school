@@ -1,5 +1,7 @@
-import { Box, Button, Collapsible, Flex, Grid, Heading, Input, Progress, Stack, Text, chakra } from '@chakra-ui/react'
-import { useState, type FormEvent, type RefObject } from 'react'
+import { Box, Button, Flex, Grid, Heading, Progress, Stack, Text, chakra } from '@chakra-ui/react'
+import type { MouseEventHandler, RefObject } from 'react'
+import { chatHash } from './CourseChat.tsx'
+import { InterestIllustration } from './InterestIllustration.tsx'
 import { areas, goals, topics, trailSteps, type Area, type Topic, type TrailState } from './courseTrail.ts'
 
 const areaKeys = Object.keys(areas) as Area[]
@@ -9,17 +11,18 @@ function toggle<Key>(items: readonly Key[], key: Key) {
   return items.includes(key) ? items.filter(item => item !== key) : [...items, key]
 }
 
-function Choice({ title, checked, onChange, card = false, radio = false }: {
+function Choice({ title, checked, onChange, illustration, radio = false }: {
   title: string
   checked: boolean
   onChange: () => void
-  card?: boolean
+  illustration?: Area
   radio?: boolean
 }) {
+  const card = Boolean(illustration)
   return (
     <chakra.label
-      display="flex" flexDirection={card ? 'column' : 'row'} alignItems={card ? 'start' : 'center'}
-      gap={card ? '2' : '3'} minH={card ? '20' : '12'} px={card ? '4' : '3'} py={card ? '3' : '2'}
+      position={card ? 'relative' : undefined} display="flex" flexDirection={card ? 'column' : 'row'}
+      alignItems={card ? 'start' : 'center'} gap={card ? '2' : '3'} minH={card ? '24' : '12'} px="3" py={card ? '3' : '2'}
       borderWidth="1px" borderColor={checked ? 'hse.solid' : 'catalog.border'} borderRadius="md"
       bg={checked ? 'hse.100' : 'catalog.surface'} fontWeight={checked || card ? 'semibold' : 'medium'}
       cursor="pointer" _hover={{ borderColor: checked ? 'hse.solid' : 'hse.400' }}
@@ -29,7 +32,9 @@ function Choice({ title, checked, onChange, card = false, radio = false }: {
         _active: { scale: '0.99', translate: '0 1px' },
       }}
     >
+      {illustration && <InterestIllustration area={illustration} />}
       <chakra.input
+        position={card ? 'absolute' : undefined} top={card ? '3' : undefined} insetEnd={card ? '3' : undefined}
         type={radio ? 'radio' : 'checkbox'} name={radio ? 'trail-priority' : undefined}
         checked={checked} onChange={onChange} boxSize="4" flexShrink="0" accentColor="hse.solid"
         _focusVisible={{ outline: '2px solid', outlineColor: 'hse.700', outlineOffset: '2px' }}
@@ -39,51 +44,41 @@ function Choice({ title, checked, onChange, card = false, radio = false }: {
   )
 }
 
-function OwnInterest({ interests, onChange }: { interests: readonly string[]; onChange: (interests: string[]) => void }) {
-  const [input, setInput] = useState('')
-
-  function add(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const value = input.trim()
-    if (!value || interests.includes(value)) return
-    onChange([...interests, value])
-    setInput('')
-  }
-
+function OwnInterest({ interests, onChange, onOpenChat }: {
+  interests: readonly string[]
+  onChange: (interests: string[]) => void
+  onOpenChat: MouseEventHandler<HTMLAnchorElement>
+}) {
   return (
-    <Collapsible.Root defaultOpen={interests.length > 0}>
-      <Collapsible.Trigger asChild>
-        <Button type="button" variant="plain" color="hse.fg" px="0" minH="12">Добавить свой интерес</Button>
-      </Collapsible.Trigger>
-      <Collapsible.Content>
-        <Stack gap="2">
-          <chakra.form onSubmit={add} display="flex" gap="2">
-            <Input
-              aria-label="Свой интерес" minH="12" minW="0" bg="catalog.surface"
-              placeholder="Например, исследовательские интервью" maxLength={90}
-              value={input} onChange={event => setInput(event.target.value)}
-            />
-            <Button type="submit" minH="12" colorPalette="hse" variant="outline" disabled={!input.trim()}>Добавить</Button>
-          </chakra.form>
-          <Flex wrap="wrap" gap="2">
-            {interests.map(interest => <Button key={interest} type="button" size="sm" variant="subtle" colorPalette="hse"
-              maxW="full" minW="0" h="auto" minH="8" py="1" whiteSpace="normal" textAlign="start"
-              aria-label={`Удалить интерес ${interest}`} onClick={() => onChange(interests.filter(value => value !== interest))}
-            >
-              <Text as="span" minW="0" overflowWrap="anywhere">{interest}</Text>
-              <Box as="span" flexShrink="0" aria-hidden="true">×</Box>
-            </Button>)}
-          </Flex>
-        </Stack>
-      </Collapsible.Content>
-    </Collapsible.Root>
+    <>
+      <Button
+        asChild variant="outline" colorPalette="hse" size="lg" minH="14" px="4" justifyContent="space-between"
+        bg="catalog.surface" color="catalog.ink" borderColor="catalog.border" borderRadius="md" fontWeight="semibold"
+        _hover={{ bg: 'catalog.surface', borderColor: 'hse.400' }}
+        _active={{ bg: 'hse.100' }}
+        _focusVisible={{ outline: '2px solid', outlineColor: 'hse.700', outlineOffset: '2px' }}
+        _motionSafe={{ transition: 'scale 140ms, translate 140ms', _active: { scale: '0.99', translate: '0 1px' } }}
+      >
+        <a href={chatHash} onClick={onOpenChat}>Расскажу в чате <Box as="span" aria-hidden="true">↗</Box></a>
+      </Button>
+      {interests.length > 0 && <Flex wrap="wrap" gap="2">
+        {interests.map(interest => <Button key={interest} type="button" size="sm" variant="subtle" colorPalette="hse"
+          maxW="full" minW="0" h="auto" minH="8" py="1" whiteSpace="normal" textAlign="start"
+          aria-label={`Удалить интерес ${interest}`} onClick={() => onChange(interests.filter(value => value !== interest))}
+        >
+          <Text as="span" minW="0" overflowWrap="anywhere">{interest}</Text>
+          <Box as="span" flexShrink="0" aria-hidden="true">×</Box>
+        </Button>)}
+      </Flex>}
+    </>
   )
 }
 
-export function ProfileForm({ state, headingRef, onChange }: {
+export function ProfileForm({ state, headingRef, onChange, onOpenChat }: {
   state: TrailState
   headingRef: RefObject<HTMLHeadingElement | null>
   onChange: (state: TrailState) => void
+  onOpenChat: MouseEventHandler<HTMLAnchorElement>
 }) {
   if (state.stage === 'feed') return null
   const stage = state.stage
@@ -117,11 +112,11 @@ export function ProfileForm({ state, headingRef, onChange }: {
   function choices() {
     if (stage === 'areas') {
       return <Stack gap="2">
-        <Grid gap="2" templateColumns="repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr))">
-          {areaKeys.map(id => <Choice key={id} card title={areas[id][0]} checked={state.areas.includes(id)}
+        <Grid gap="2" templateColumns={{ base: 'repeat(2, minmax(0, 1fr))', md: 'repeat(3, minmax(0, 1fr))' }}>
+          {areaKeys.map(id => <Choice key={id} title={areas[id][0]} illustration={id} checked={state.areas.includes(id)}
             onChange={() => update({ areas: toggle(state.areas, id) })} />)}
         </Grid>
-        <OwnInterest interests={state.own} onChange={own => update({ own })} />
+        <OwnInterest interests={state.own} onChange={own => update({ own })} onOpenChat={onOpenChat} />
       </Stack>
     }
     if (stage === 'goals') {

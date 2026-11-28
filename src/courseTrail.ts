@@ -40,6 +40,7 @@ export type TrailState = {
 }
 
 export const trailStorageKey = 'hse-elective-trail-v1'
+export const ownInterestMaxLength = 90
 
 export function emptyTrail(): TrailState {
   return { areas: [], tags: [], goals: [], own: [], priority: '', wide: true, stage: 'areas', from: 'areas' }
@@ -79,7 +80,7 @@ export function restoreTrail(): TrailState {
     const saved = JSON.parse(localStorage.getItem(trailStorageKey) ?? 'null')
     if (!saved || typeof saved !== 'object') return emptyTrail()
     const own = Array.isArray(saved.own)
-      ? [...new Set(saved.own.flatMap((value: unknown) => typeof value === 'string' && value.trim() ? [value.trim().slice(0, 90)] : []))] as string[]
+      ? [...new Set(saved.own.flatMap((value: unknown) => typeof value === 'string' && value.trim() ? [value.trim().slice(0, ownInterestMaxLength)] : []))] as string[]
       : []
     return cleanTrail({
       areas: recognized(saved.areas, areas), tags: recognized(saved.tags, topics), goals: recognized(saved.goals, goals),

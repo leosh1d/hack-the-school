@@ -6,26 +6,24 @@ import { courses } from './catalog.ts'
 import { searchCourses } from './discovery.ts'
 import { loadOfficialCourses, officialCatalogUrl, searchOfficialCourses, type OfficialCourse } from './officialCatalog.ts'
 
-export function CourseSearch({ browse = false }: { browse?: boolean }) {
+export function CourseSearch() {
   const [input, setInput] = useState('')
   const [query, setQuery] = useState('')
   const [official, setOfficial] = useState<readonly OfficialCourse[] | 'unavailable' | null>(null)
-  const shouldLoad = browse || Boolean(query)
   const officialMatches = official && official !== 'unavailable'
-    ? query ? searchOfficialCourses(official, query) : browse ? official : []
+    ? query ? searchOfficialCourses(official, query) : official
     : []
-  const demoMatches = query ? searchCourses(courses, query) : browse ? courses : []
+  const demoMatches = query ? searchCourses(courses, query) : courses
   const matchCount = demoMatches.length + officialMatches.length
 
   useEffect(() => {
-    if (!shouldLoad) return
     let active = true
     void loadOfficialCourses().then(
       courses => { if (active) setOfficial(courses) },
       () => { if (active) setOfficial('unavailable') },
     )
     return () => { active = false }
-  }, [shouldLoad])
+  }, [])
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -35,13 +33,13 @@ export function CourseSearch({ browse = false }: { browse?: boolean }) {
   return (
     <Stack gap="4">
       <Stack as="section" layerStyle="catalogSurface" p="4" gap="3" aria-labelledby="search-heading">
-        <Heading as="h2" size="md" id="search-heading">{browse ? 'Найти курс' : 'Уточнить запрос'}</Heading>
+        <Heading as="h2" size="md" id="search-heading">Найти курс</Heading>
         <chakra.form onSubmit={submit} role="search" aria-label="Поиск по каталогу факультативов" display="flex" alignItems="end" gap="2">
           <chakra.label display="grid" gap="1.5" minW="0" flex="1" fontSize="sm" fontWeight="semibold">
             Запрос по каталогу
             <Input
               type="search" value={input} onChange={event => setInput(event.target.value)}
-              placeholder={browse ? 'Например, инфографика' : 'Например, интервью с клиентами'}
+              placeholder="Например, инфографика"
               maxLength={200} required minW="0" borderColor="catalog.border" fontWeight="normal"
             />
           </chakra.label>
@@ -49,7 +47,7 @@ export function CourseSearch({ browse = false }: { browse?: boolean }) {
         </chakra.form>
         <Flex gap="2" align="start" justify="space-between">
           <Box role="status" color="catalog.muted" fontSize="sm" overflowWrap="anywhere">
-            {shouldLoad && official === null && <Text>Загружаем каталог ВШЭ…</Text>}
+            {official === null && <Text>Загружаем каталог ВШЭ…</Text>}
             {official === 'unavailable' && <Text>Каталог ВШЭ не загрузился. <Link href={officialCatalogUrl} color="hse.fg">Открыть на сайте ВШЭ</Link></Text>}
             {query && official !== null && official !== 'unavailable' && (
               <Text>{matchCount
