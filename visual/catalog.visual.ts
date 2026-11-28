@@ -38,14 +38,14 @@ async function goToFormat(page: Page) {
   await next(page)
 }
 
-async function expectScreen(page: Page, name: string) {
+async function expectScreen(page: Page, name: string, options?: { threshold: number }) {
   await page.mouse.move(0, 0)
   const screenshot = await page.screenshot({
     animations: 'disabled', caret: 'hide', fullPage: true, scale: 'css',
   })
 
   // Comparing a captured buffer retains the actual PNG when a reference is missing in strict mode.
-  expect(screenshot).toMatchSnapshot(name)
+  expect(screenshot).toMatchSnapshot(name, options)
 }
 
 async function expectNextNearBottom(page: Page) {
@@ -69,7 +69,7 @@ test('анкета подбора', async ({ page, isMobile }) => {
   await expect(page.getByRole('button', { name: 'Дальше' })).toBeInViewport()
   await expect(page.getByRole('button', { name: 'Расскажу в чате' })).toBeInViewport()
   if (isMobile) await expectNextNearBottom(page)
-  await expectScreen(page, '01-profile.png')
+  await expectScreen(page, '01-profile.png', { threshold: 0 })
 })
 
 test('подборка с объяснениями', async ({ page }) => {
@@ -143,7 +143,7 @@ test('ответ чата до заполнения анкеты', async ({ page
   const replies = dialog.getByRole('log')
   await expect(replies.getByText('интервью с клиентами', { exact: true })).toBeVisible()
   await expect(replies.getByText('Интервью с клиентами', { exact: true })).toBeVisible()
-  await expectScreen(page, '06-course-chat.png')
+  await expectScreen(page, '06-course-chat.png', { threshold: 0 })
 })
 
 test('вопрос об опыте в выбранных темах сразу после навыков', async ({ page }) => {
