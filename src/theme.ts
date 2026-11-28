@@ -6,6 +6,14 @@ const config = defineConfig({
     body: { bg: 'catalog.canvas', color: 'catalog.ink' },
   },
   theme: {
+    layerStyles: {
+      catalogSurface: {
+        value: { bg: 'catalog.surface', borderWidth: '1px', borderColor: 'catalog.border', borderRadius: 'xl' },
+      },
+      catalogGrid: {
+        value: { gap: '4', gridTemplateColumns: { base: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, listStyle: 'none' },
+      },
+    },
     tokens: {
       colors: {
         hse: {

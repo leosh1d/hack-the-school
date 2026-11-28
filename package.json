@@ -9,15 +9,19 @@
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest --watch",
+    "test:visual": "npm run build && playwright test",
+    "test:visual:update": "npm run build && playwright test --update-snapshots=all",
     "preview": "vite preview"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.38.0",
     "@emotion/react": "^11.14.0",
+    "motion": "14.14.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^8.0.0",
     "@testing-library/react": "^16.3.3",
