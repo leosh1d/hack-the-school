@@ -25,13 +25,14 @@ export async function loadOfficialCourses(): Promise<readonly OfficialCourse[]> 
   return courses
 }
 
-export function searchOfficialCourses(courses: readonly OfficialCourse[], query: string) {
+export function searchOfficialCourses(courses: readonly OfficialCourse[], query: string, extraText?: (course: OfficialCourse) => string) {
   const terms = catalogSearchWords(query, 2)
   if (!terms.length) return []
 
   return courses.filter(course => {
     const words = catalogSearchWords([
       course.title, course.department, course.faculty, course.status, course.campus, course.academicYear, course.language,
+      extraText?.(course),
     ].join(' '), 2)
     return terms.every(term => {
       const language = searchLanguageAliases.get(term)

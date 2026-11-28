@@ -52,7 +52,7 @@ function courseModules(term: string | undefined) {
   })
 }
 
-function matchesConditions(course: OfficialCourse, profile: OfficialPreferences) {
+export function matchesConditions(course: OfficialCourse, profile: Pick<OfficialPreferences, 'maxContactHours' | 'modules' | 'languages'>) {
   if (profile.maxContactHours !== null && (course.contactHours === undefined || course.contactHours > profile.maxContactHours)) {
     return false
   }
