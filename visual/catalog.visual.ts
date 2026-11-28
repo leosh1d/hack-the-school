@@ -64,6 +64,12 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('анкета подбора', async ({ page, isMobile }) => {
+  const nav = page.getByRole('navigation', { name: 'Разделы' })
+  const halfWidth = page.viewportSize()!.width / 2
+  await expect(page.getByRole('button', { name: /^Факультативы/ })).toHaveCount(0)
+  await expect(nav.getByRole('button')).toHaveCount(2)
+  expect(await nav.getByRole('button', { name: 'Подбор' }).boundingBox()).toMatchObject({ x: 0, width: halfWidth })
+  expect(await nav.getByRole('button', { name: 'Каталог' }).boundingBox()).toMatchObject({ x: halfWidth, width: halfWidth })
   await expect(page.getByRole('checkbox', { name: 'Карьерные интересы' })).toBeVisible()
   await expect(page.getByRole('checkbox', { name: 'Навыки' })).toBeVisible()
   await expect(page.getByRole('progressbar', { name: 'Ход анкеты' })).toHaveAttribute('aria-valuetext', /^Шаг 1, \d+%$/)

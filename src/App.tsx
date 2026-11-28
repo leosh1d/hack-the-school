@@ -15,8 +15,6 @@ const pageDescriptions = {
   catalog: 'Общеуниверситетские факультативы московского кампуса ВШЭ на 2026/2027 учебный год.',
 }
 
-const markColors = ['hse.solid', 'gsb.solid', 'hse.solid', 'hse.300']
-
 function App() {
   const [view, setView] = useState<View>('profile')
   const [survey, setSurvey] = useState<SurveyDraft>(emptySurvey)
@@ -41,31 +39,21 @@ function App() {
   return (
     <Box display="flex" flexDirection="column" minH="100dvh" h={view === 'profile' ? { base: '100dvh', md: 'auto' } : undefined} bg="catalog.canvas" color="catalog.ink">
       <Box as="header" flexShrink="0" bg="catalog.surface" borderBottomWidth="1px" borderColor="catalog.border">
-        <Container maxW="6xl" px={{ base: '3', sm: '6' }}>
-          <Flex minH="15" align="center" justify="space-between" gap={{ base: '1', sm: '4' }}>
-            <Button type="button" size="sm" variant="plain" p="0" color="catalog.ink" onClick={() => navigate('profile')}>
-              <Grid aria-hidden="true" templateColumns="repeat(2, 6px)" gap="2px">
-                {markColors.map((bg, index) => <Box key={index} boxSize="6px" bg={bg} borderTopRightRadius={index === 1 ? 'full' : undefined} />)}
-              </Grid>
-              Факультативы<Box as="span" display={{ base: 'none', sm: 'inline' }} color="catalog.muted">/ ВШБ</Box>
+        <Grid as="nav" aria-label="Разделы" w="full" templateColumns="repeat(2, minmax(0, 1fr))">
+          {([
+            { title: 'Подбор', target: 'profile', active: view !== 'catalog' },
+            { title: 'Каталог', target: 'catalog', active: view === 'catalog' },
+          ] as const).map(({ title, target, active }) => (
+            <Button
+              key={target} type="button" variant="plain" size="sm" minH="12" justifyContent="center"
+              borderBottomWidth="2px" borderRadius="0" borderBottomColor={active ? 'gsb.solid' : 'transparent'}
+              color={active ? 'hse.solid' : 'catalog.muted'} focusVisibleRing="inside"
+              aria-current={active ? 'page' : undefined} onClick={() => navigate(target)}
+            >
+              {title}
             </Button>
-            <Flex as="nav" aria-label="Разделы" gap="1" align="stretch" alignSelf="stretch">
-              {([
-                { title: 'Подбор', target: 'profile', active: view !== 'catalog' },
-                { title: 'Каталог', target: 'catalog', active: view === 'catalog' },
-              ] as const).map(({ title, target, active }) => (
-                <Button
-                  key={target} type="button" variant="plain" size="sm" h="auto" px="2"
-                  borderBottomWidth="2px" borderRadius="0" borderColor={active ? 'gsb.solid' : 'transparent'}
-                  color={active ? 'hse.solid' : 'catalog.muted'} aria-current={active ? 'page' : undefined}
-                  onClick={() => navigate(target)}
-                >
-                  {title}
-                </Button>
-              ))}
-            </Flex>
-          </Flex>
-        </Container>
+          ))}
+        </Grid>
       </Box>
 
       <Container as="main" display="flex" flexDirection="column" flex="1" minH="0" maxW="6xl" px={{ base: '3', sm: '6' }}>
