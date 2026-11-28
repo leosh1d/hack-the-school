@@ -2,7 +2,12 @@ import { Box, Button, Card, Grid, Text } from '@chakra-ui/react'
 import { useId } from 'react'
 import type { OfficialCourse } from './officialCatalog.ts'
 
-export function OfficialCourseCard({ course, reasons }: { course: OfficialCourse; reasons?: readonly string[] }) {
+export function OfficialCourseCard({ course, reasons, summary, discovery }: {
+  course: OfficialCourse
+  reasons?: readonly string[]
+  summary?: string
+  discovery?: boolean
+}) {
   const headingId = useId()
   const facts = [
     ['Учебный год', course.academicYear],
@@ -17,7 +22,10 @@ export function OfficialCourseCard({ course, reasons }: { course: OfficialCourse
   return (
     <Card.Root as="article" layerStyle="catalogSurface" h="full" minW="0" aria-labelledby={headingId}>
       <Card.Body px="4" py="4" gap="3">
-        <Text color="catalog.muted" fontSize="xs">{course.status} · {course.campus}</Text>
+        <Text color="catalog.muted" fontSize="xs">
+          {discovery && <Box as="span" color="gsb.fg" fontWeight="semibold">Другой ракурс · </Box>}
+          {course.status} · {course.campus}
+        </Text>
         <Card.Title as="h3" id={headingId} overflowWrap="anywhere">{course.title}</Card.Title>
         {(course.department || course.faculty) && <Box color="catalog.muted" fontSize="sm">
           {course.department && <Text>{course.department}</Text>}
@@ -31,6 +39,7 @@ export function OfficialCourseCard({ course, reasons }: { course: OfficialCourse
             </Box>
           </Box>
         )}
+        {summary && <Text color="catalog.muted">{summary}</Text>}
         <Grid as="dl" templateColumns="repeat(2, minmax(0, 1fr))" gap="2.5" borderTopWidth="1px" borderColor="catalog.border" pt="2.5" mt="auto">
           {facts.map(([label, value]) => value !== undefined && (
             <Box key={label}>

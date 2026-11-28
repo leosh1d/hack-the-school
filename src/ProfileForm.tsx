@@ -1,42 +1,28 @@
-import { Box, Button, Grid, Heading, Progress, Stack, Text, chakra } from '@chakra-ui/react'
-import { LazyMotion, domAnimation, useReducedMotion } from 'motion/react'
-import * as m from 'motion/react-m'
-import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type RefObject, type UIEvent } from 'react'
-import { languages } from './catalog.ts'
-import { CourseChat } from './CourseChat.tsx'
-import { modules, skills, topics, type OfficialPreferences } from './officialRecommendations.ts'
-import { surveySteps, type SurveyDraft, type SurveyRoute, type SurveyStep } from './survey.ts'
+import { Box, Button, Collapsible, Flex, Grid, Heading, Input, Progress, Stack, Text, chakra } from '@chakra-ui/react'
+import { useState, type FormEvent, type RefObject } from 'react'
+import { areas, goals, topics, trailSteps, type Area, type Topic, type TrailState } from './courseTrail.ts'
 
-const optionalChoices = 'Отметьте подходящие варианты или пропустите вопрос.'
+const areaKeys = Object.keys(areas) as Area[]
+const goalKeys = Object.keys(goals) as (keyof typeof goals)[]
 
-const questions = {
-  route: { title: 'По чему подобрать факультативы?', description: 'Выберите интересы, навыки или оба варианта.' },
-  topics: { title: 'Какие темы вам интересны?', description: 'Выберите хотя бы одну тему.' },
-  skills: { title: 'Какие навыки хотите развить?', description: 'Выберите хотя бы один навык.' },
-  maxContactHours: { title: 'Сколько контактных часов вы готовы выделить?', description: 'Объём занятий за весь курс.' },
-  modules: { title: 'В каких модулях вы можете учиться?', description: 'Выберите все подходящие модули или пропустите вопрос.' },
-  language: { title: 'На каком языке хотите учиться?', description: optionalChoices },
-} satisfies Record<SurveyStep, { title: string; description?: string }>
+function toggle<Key>(items: readonly Key[], key: Key) {
+  return items.includes(key) ? items.filter(item => item !== key) : [...items, key]
+}
 
-const routeChoices = {
-  topics: 'Интересы', skills: 'Навыки',
-} satisfies Record<Exclude<SurveyRoute, 'both'>, string>
-
-const hours: readonly (number | null)[] = [30, 40, 60, 80, null]
-
-function Choice({ checked, title, onChange, card = false }: {
-  checked: boolean
+function Choice({ title, checked, onChange, card = false, radio = false }: {
   title: string
-  onChange: (checked: boolean) => void
+  checked: boolean
+  onChange: () => void
   card?: boolean
+  radio?: boolean
 }) {
   return (
     <chakra.label
       display="flex" flexDirection={card ? 'column' : 'row'} alignItems={card ? 'start' : 'center'}
       gap={card ? '2' : '3'} minH={card ? '20' : '12'} px={card ? '4' : '3'} py={card ? '3' : '2'}
       borderWidth="1px" borderColor={checked ? 'hse.solid' : 'catalog.border'} borderRadius="md"
-      bg={checked ? 'hse.100' : 'catalog.surface'} cursor="pointer" fontWeight={card || checked ? 'semibold' : 'medium'}
-      _hover={{ borderColor: checked ? 'hse.solid' : 'hse.400' }}
+      bg={checked ? 'hse.100' : 'catalog.surface'} fontWeight={checked || card ? 'semibold' : 'medium'}
+      cursor="pointer" _hover={{ borderColor: checked ? 'hse.solid' : 'hse.400' }}
       _active={{ bg: 'hse.100' }}
       _motionSafe={{
         transition: 'background-color 150ms, border-color 150ms, scale 140ms, translate 140ms',
@@ -44,9 +30,8 @@ function Choice({ checked, title, onChange, card = false }: {
       }}
     >
       <chakra.input
-        type="checkbox"
-        checked={checked} onChange={event => onChange(event.target.checked)}
-        boxSize="4" flexShrink="0" accentColor="hse.solid"
+        type={radio ? 'radio' : 'checkbox'} name={radio ? 'trail-priority' : undefined}
+        checked={checked} onChange={onChange} boxSize="4" flexShrink="0" accentColor="hse.solid"
         _focusVisible={{ outline: '2px solid', outlineColor: 'hse.700', outlineOffset: '2px' }}
       />
       {title}
@@ -54,301 +39,163 @@ function Choice({ checked, title, onChange, card = false }: {
   )
 }
 
-function MultipleChoices<Key extends string>({ options, selected, onChange, cards = false }: {
-  options: Record<Key, string>
-  selected: readonly Key[]
-  onChange: (selected: Key[]) => void
-  cards?: boolean
-}) {
-  return (
-    <Grid gap="2" templateColumns={cards ? 'repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr))' : 'minmax(0, 1fr)'}>
-      {(Object.entries(options) as [Key, string][]).map(([value, title]) => (
-        <Choice key={value} card={cards} title={title} checked={selected.includes(value)} onChange={checked => {
-          onChange(checked ? [...selected, value] : selected.filter(item => item !== value))
-        }} />
-      ))}
-    </Grid>
-  )
-}
+function OwnInterest({ interests, onChange }: { interests: readonly string[]; onChange: (interests: string[]) => void }) {
+  const [input, setInput] = useState('')
 
-function hourRowHeight(wheel: HTMLDivElement) {
-  return wheel.firstElementChild?.getBoundingClientRect().height ?? 0
-}
-
-function nearestHour(top: number, rowHeight: number) {
-  return Math.max(0, Math.min(hours.length - 1, Math.round(top / rowHeight)))
-}
-
-type MouseDrag = {
-  pointerId: number
-  startY: number
-  startTop: number
-  lastY: number
-  lastAt: number
-  velocity: number
-  moved: boolean
-}
-
-function StudyHours({ value, onChange }: { value: number | null; onChange: (hours: number | null) => void }) {
-  const reducedMotion = useReducedMotion()
-  const wheelRef = useRef<HTMLDivElement>(null)
-  const drag = useRef<MouseDrag | null>(null)
-  const ignoreClick = useRef(false)
-  const selection = hours.indexOf(value)
-  const initialSelection = useRef(selection)
-  const optionId = useId()
-
-  useLayoutEffect(() => {
-    const wheel = wheelRef.current
-    if (wheel) wheel.scrollTop = initialSelection.current * hourRowHeight(wheel)
-  }, [])
-
-  function updateSelection(index: number) {
-    if (index !== selection) onChange(hours[index])
-  }
-
-  function choose(index: number) {
-    const wheel = wheelRef.current
-    if (wheel) wheel.scrollTop = index * hourRowHeight(wheel)
-    updateSelection(index)
-  }
-
-  function syncScroll({ currentTarget: wheel }: UIEvent<HTMLDivElement>) {
-    const rowHeight = hourRowHeight(wheel)
-    if (rowHeight > 0) updateSelection(nearestHour(wheel.scrollTop, rowHeight))
-  }
-
-  function startDrag(event: PointerEvent<HTMLDivElement>) {
-    ignoreClick.current = false
-    if (event.pointerType !== 'mouse' || event.button !== 0) return
-    const y = event.clientY
-    drag.current = {
-      pointerId: event.pointerId, startY: y, startTop: event.currentTarget.scrollTop,
-      lastY: y, lastAt: performance.now(), velocity: 0, moved: false,
-    }
-  }
-
-  function moveDrag(event: PointerEvent<HTMLDivElement>) {
-    const current = drag.current
-    if (current?.pointerId !== event.pointerId || !(event.buttons & 1)) return
-    const wheel = event.currentTarget
-    const distance = current.startY - event.clientY
-    if (!current.moved) {
-      if (Math.abs(distance) < 4) return
-      current.moved = true
-      ignoreClick.current = true
-      wheel.setPointerCapture(event.pointerId)
-      wheel.dataset.dragging = ''
-    }
-    const now = performance.now()
-    current.velocity = (current.lastY - event.clientY) / Math.max(1, now - current.lastAt)
-    current.lastY = event.clientY
-    current.lastAt = now
-    wheel.scrollTop = current.startTop + distance
-  }
-
-  function finishDrag(event: PointerEvent<HTMLDivElement>) {
-    const current = drag.current
-    if (current?.pointerId !== event.pointerId) return
-    drag.current = null
-    if (!current.moved) return
-    const wheel = event.currentTarget
-    const height = hourRowHeight(wheel)
-    const top = wheel.scrollTop
-    const flick = event.type === 'pointerup' && !reducedMotion && performance.now() - current.lastAt < 75
-    const travel = flick ? Math.max(-2 * height, Math.min(2 * height, current.velocity * 115)) : 0
-    delete wheel.dataset.dragging
-    wheel.focus({ preventScroll: true })
-    if (!height) return
-    const target = nearestHour(top + travel, height)
-    if (target === nearestHour(top, height)) {
-      choose(target)
-    } else {
-      wheel.scrollTo({ top: target * height, behavior: 'smooth' })
-    }
-  }
-
-  function moveByKey(event: KeyboardEvent<HTMLDivElement>) {
-    const positions: Record<string, number> = {
-      ArrowUp: Math.max(0, selection - 1),
-      ArrowDown: Math.min(hours.length - 1, selection + 1),
-      Home: 0,
-      End: hours.length - 1,
-    }
-    const next = positions[event.key]
-    if (typeof next !== 'number') return
+  function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    choose(next)
+    const value = input.trim()
+    if (!value || interests.includes(value)) return
+    onChange([...interests, value])
+    setInput('')
   }
 
   return (
-    <LazyMotion features={domAnimation} strict>
-      <Box layerStyle="catalogSurface" position="relative" p="3">
-        <Box
-          aria-hidden="true" position="absolute" insetInline="3" top="50%" translate="0 -50%"
-          h="12" bg="hse.100" borderRadius="md" pointerEvents="none"
-        />
-        <Box
-          ref={wheelRef} role="listbox" tabIndex={0} aria-labelledby="survey-question"
-          aria-activedescendant={`${optionId}-${selection}`}
-          h="36" py="12" position="relative" overflowY="auto" scrollSnapType="y mandatory"
-          scrollBehavior="auto" overscrollBehaviorY="contain" scrollbarWidth="none" borderRadius="md"
-          _dragging={{ scrollSnapType: 'none', cursor: 'grabbing' }}
-          _focusVisible={{ outline: '2px solid', outlineColor: 'hse.700', outlineOffset: '2px' }}
-          onKeyDown={moveByKey}
-          onScroll={syncScroll}
-          onPointerDown={startDrag} onPointerMove={moveDrag}
-          onPointerUp={finishDrag} onPointerCancel={finishDrag} onLostPointerCapture={finishDrag}
-          onPointerLeave={() => { if (!drag.current?.moved) drag.current = null }}
-          onClickCapture={event => {
-            if (!ignoreClick.current) return
-            ignoreClick.current = false
-            event.stopPropagation()
-          }}
-        >
-          {hours.map((hour, index) => {
-            const selected = index === selection
-            return (
-              <Box
-                key={index} id={`${optionId}-${index}`} role="option" aria-selected={selected}
-                display="grid" placeItems="center" h="12" px="2" scrollSnapAlign="center" cursor="inherit"
-                color={selected ? 'hse.fg' : 'catalog.muted'} fontWeight={selected ? 'bold' : 'medium'}
-                fontSize="md" textAlign="center" userSelect="none"
-                _motionSafe={{ transition: 'color 140ms ease-out' }}
-                onClick={() => {
-                  wheelRef.current?.focus({ preventScroll: true })
-                  choose(index)
-                }}
-              >
-                <m.span initial={false}
-                  animate={{ scale: reducedMotion || !selected ? 1 : 1.06 }}
-                  transition={{ duration: reducedMotion ? 0 : 0.12, ease: 'easeOut' }}
-                >
-                  {hour === null ? 'Без ограничений' : `До ${hour} ч`}
-                </m.span>
-              </Box>
-            )
-          })}
-        </Box>
-      </Box>
-    </LazyMotion>
-  )
-}
-
-export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
-  draft: SurveyDraft
-  headingRef: RefObject<HTMLHeadingElement | null>
-  onChange: (draft: SurveyDraft) => void
-  onSubmit: () => void
-}) {
-  const [step, setStep] = useState<SurveyStep>('route')
-  const [error, setError] = useState('')
-  const focusNext = useRef(false)
-  const steps = surveySteps(draft.route)
-  const stepIndex = steps.indexOf(step)
-  const progressMax = step === 'route' ? surveySteps('both').length : steps.length
-  const progressPercent = Math.round((stepIndex + 1) / progressMax * 100)
-  const nextStep = steps[stepIndex + 1]
-  const previousStep = steps[stepIndex - 1]
-  const { title, description } = questions[step]
-  const { profile } = draft
-  const selectedRoutes: (keyof typeof routeChoices)[] = draft.route === 'both'
-    ? ['topics', 'skills']
-    : draft.route ? [draft.route] : []
-
-  useEffect(() => {
-    if (focusNext.current) {
-      headingRef.current?.focus()
-      focusNext.current = false
-    }
-  }, [headingRef, step])
-
-  function update(values: Partial<SurveyDraft>) {
-    onChange({ ...draft, ...values })
-    setError('')
-  }
-
-  function updateProfile<Key extends keyof OfficialPreferences>(field: Key, value: OfficialPreferences[Key]) {
-    update({ profile: { ...profile, [field]: value } })
-  }
-
-  function goTo(next: SurveyStep) {
-    focusNext.current = true
-    setError('')
-    setStep(next)
-  }
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const errors: Partial<Record<SurveyStep, string>> = {
-      route: draft.route ? '' : 'Выберите, по чему подобрать курсы.',
-      topics: profile.topics.length ? '' : 'Выберите хотя бы одну тему.',
-      skills: profile.skills.length ? '' : 'Выберите хотя бы один навык.',
-    }
-
-    if (errors[step]) {
-      setError(errors[step])
-      return
-    }
-    if (nextStep) goTo(nextStep)
-    else onSubmit()
-  }
-
-  function renderChoices() {
-    switch (step) {
-      case 'route': return (
+    <Collapsible.Root defaultOpen={interests.length > 0}>
+      <Collapsible.Trigger asChild>
+        <Button type="button" variant="plain" color="hse.fg" px="0" minH="12">Добавить свой интерес</Button>
+      </Collapsible.Trigger>
+      <Collapsible.Content>
         <Stack gap="2">
-          <MultipleChoices cards options={routeChoices} selected={selectedRoutes} onChange={value => update({
-            route: value.length === 2 ? 'both' : value[0] ?? '',
-          })} />
-          <CourseChat />
+          <chakra.form onSubmit={add} display="flex" gap="2">
+            <Input
+              aria-label="Свой интерес" minH="12" minW="0" bg="catalog.surface"
+              placeholder="Например, исследовательские интервью" maxLength={90}
+              value={input} onChange={event => setInput(event.target.value)}
+            />
+            <Button type="submit" minH="12" colorPalette="hse" variant="outline" disabled={!input.trim()}>Добавить</Button>
+          </chakra.form>
+          <Flex wrap="wrap" gap="2">
+            {interests.map(interest => <Button key={interest} type="button" size="sm" variant="subtle" colorPalette="hse"
+              maxW="full" minW="0" h="auto" minH="8" py="1" whiteSpace="normal" textAlign="start"
+              aria-label={`Удалить интерес ${interest}`} onClick={() => onChange(interests.filter(value => value !== interest))}
+            >
+              <Text as="span" minW="0" overflowWrap="anywhere">{interest}</Text>
+              <Box as="span" flexShrink="0" aria-hidden="true">×</Box>
+            </Button>)}
+          </Flex>
         </Stack>
-      )
-      case 'topics': return <MultipleChoices options={topics} selected={profile.topics} onChange={value => updateProfile('topics', value)} />
-      case 'skills': return <MultipleChoices options={skills} selected={profile.skills} onChange={value => updateProfile('skills', value)} />
-      case 'maxContactHours': return <StudyHours value={profile.maxContactHours} onChange={value => updateProfile('maxContactHours', value)} />
-      case 'modules': return <MultipleChoices cards options={modules} selected={profile.modules} onChange={value => updateProfile('modules', value)} />
-      case 'language': return <MultipleChoices cards options={languages} selected={profile.languages} onChange={value => updateProfile('languages', value)} />
+      </Collapsible.Content>
+    </Collapsible.Root>
+  )
+}
+
+export function ProfileForm({ state, headingRef, onChange }: {
+  state: TrailState
+  headingRef: RefObject<HTMLHeadingElement | null>
+  onChange: (state: TrailState) => void
+}) {
+  if (state.stage === 'feed') return null
+  const stage = state.stage
+  const steps = trailSteps(state)
+  const index = steps.indexOf(stage)
+  const previous = steps[index - 1]
+  const next = steps[index + 1]
+  const total = stage === 'areas' ? trailSteps({ areas: areaKeys }).length : steps.length
+  const percent = Math.round((index + 1) / total * 100)
+  const area = stage === 'areas' || stage === 'goals' || stage === 'priority' ? undefined : areas[stage]
+  const title = stage === 'areas' ? 'Что тебе интересно?'
+    : stage === 'goals' ? 'Что хочется унести с курса?'
+    : stage === 'priority' ? 'Что поставить на первое место?'
+    : 'Что именно тебя цепляет?'
+  const description = stage === 'areas' ? 'Отметь всё, что хочется попробовать в следующем семестре.'
+    : stage === 'goals' ? 'Можно отметить несколько целей.'
+    : area ? 'Можно выбрать несколько занятий или оставить тему широкой.' : undefined
+
+  function update(values: Partial<TrailState>) {
+    onChange({ ...state, ...values })
+  }
+
+  function topicChoice(id: Topic) {
+    return <Choice title={topics[id]} checked={state.tags.includes(id)} onChange={() => update({ tags: toggle(state.tags, id) })} />
+  }
+
+  function showFeed() {
+    update({ stage: 'feed', from: stage })
+  }
+
+  function choices() {
+    if (stage === 'areas') {
+      return <Stack gap="2">
+        <Grid gap="2" templateColumns="repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr))">
+          {areaKeys.map(id => <Choice key={id} card title={areas[id][0]} checked={state.areas.includes(id)}
+            onChange={() => update({ areas: toggle(state.areas, id) })} />)}
+        </Grid>
+        <OwnInterest interests={state.own} onChange={own => update({ own })} />
+      </Stack>
     }
+    if (stage === 'goals') {
+      return <Stack gap="2">
+        {goalKeys.map(id => <Choice key={id} title={goals[id]} checked={state.goals.includes(id)}
+          onChange={() => update({ goals: toggle(state.goals, id) })} />)}
+      </Stack>
+    }
+    if (stage === 'priority') {
+      return <Stack gap="2">
+        <Choice radio title="Все интересы на равных" checked={!state.priority} onChange={() => update({ priority: '' })} />
+        {state.areas.map(id => <Choice key={id} radio title={areas[id][0]} checked={state.priority === id}
+          onChange={() => update({ priority: id })} />)}
+      </Stack>
+    }
+    return <Stack gap="2">
+      {areas[stage][1].map(id => <Stack key={id} gap="2">
+        {topicChoice(id)}
+        {id === 'ai' && state.tags.includes('ai') && (
+          <Stack gap="2" ps="3" borderStartWidth="2px" borderColor="catalog.border"
+            _motionSafe={{ animationName: 'fade-in', animationDuration: 'fast' }}>
+            {topicChoice('ml')}
+            {state.tags.includes('ml') && <Box ps="3">{topicChoice('nlp')}</Box>}
+          </Stack>
+        )}
+      </Stack>)}
+    </Stack>
   }
 
   return (
     <Stack gap="4" minH="0">
-      <Progress.Root value={stepIndex + 1} max={progressMax} size="xs" shape="full" colorPalette="hse"
+      <Progress.Root value={index + 1} max={total} size="xs" shape="full" colorPalette="hse"
         display="flex" flexShrink="0" alignItems="center" gap="3"
       >
-        <Progress.Label color="gsb.fg" fontWeight="semibold" whiteSpace="nowrap">Шаг {stepIndex + 1}</Progress.Label>
-        <Progress.Track flex="1" bg="hse.200" aria-label="Ход анкеты" aria-valuetext={`Шаг ${stepIndex + 1}, ${progressPercent}%`}>
+        <Progress.Label color="gsb.fg" fontWeight="semibold" whiteSpace="nowrap">Шаг {index + 1}</Progress.Label>
+        <Progress.Track flex="1" bg="hse.200" aria-label="Ход подбора" aria-valuetext={`Шаг ${index + 1}, ${percent}%`}>
           <Progress.Range borderRadius="full" transition="none" _motionSafe={{ transition: 'width 180ms ease-out' }} />
         </Progress.Track>
       </Progress.Root>
-      <chakra.form key={step} onSubmit={submit} aria-labelledby="survey-question" display="flex" flexDirection="column" flex="1" minH="0">
-        <chakra.fieldset
-          flex="1" minW="0" minH="0" pb="4" overflowY={{ base: 'auto', md: 'visible' }}
-          aria-labelledby="survey-question" aria-describedby={description ? 'survey-description' : undefined}
-          _motionSafe={{ animationName: 'fade-in, slide-from-bottom', animationDuration: 'fast', animationTimingFunction: 'ease-out' }}
-        >
-          <Heading as="h1" id="survey-question" tabIndex={-1} ref={headingRef} size={{ base: 'xl', md: '3xl' }} mb={description ? '2' : '5'} _focusVisible={{ outline: 'none' }}>
-            {title}
-          </Heading>
-          {description && <Text color="catalog.muted" id="survey-description" mb="5" fontSize="sm">{description}</Text>}
-          {renderChoices()}
-          {error && <Text id="survey-error" role="alert" color="gsb.fg" fontSize="sm" mt="3">{error}</Text>}
-        </chakra.fieldset>
+      <chakra.fieldset
+        key={stage} flex="1" minW="0" minH="0" p="1" overflowY={{ base: 'auto', md: 'visible' }}
+        aria-labelledby="trail-question" aria-describedby={description ? 'trail-description' : undefined}
+        _motionSafe={{ animationName: 'fade-in, slide-from-bottom', animationDuration: 'fast', animationTimingFunction: 'ease-out' }}
+      >
+        {area && <Text color="gsb.fg" fontWeight="semibold" fontSize="sm" mb="1">{area[0]}</Text>}
+        <Heading as="h1" id="trail-question" ref={headingRef} tabIndex={-1} size={{ base: 'xl', md: '3xl' }}
+          mb={description ? '2' : '5'} _focusVisible={{ outline: 'none' }}
+        >{title}</Heading>
+        {description && <Text color="catalog.muted" id="trail-description" mb="5" fontSize="sm">{description}</Text>}
+        {choices()}
+      </chakra.fieldset>
 
-        <Grid
-          flexShrink="0" gap="2" justifyContent={{ md: 'end' }} pt={{ base: '2', md: '0' }}
-          pb={{ base: 'max(0.75rem, env(safe-area-inset-bottom))', md: '0' }}
-          templateColumns={previousStep ? { base: 'minmax(0, 1fr) minmax(0, 1.8fr)', md: 'auto auto' } : 'minmax(0, 1fr)'}
+      <Stack flexShrink="0" gap="2" pt={{ base: '2', md: '0' }} pb={{ base: 'max(0.75rem, env(safe-area-inset-bottom))', md: '0' }}>
+        <Grid gap="2" justifyContent={{ md: 'end' }}
+          templateColumns={previous ? { base: 'minmax(0, 1fr) minmax(0, 1.8fr)', md: 'auto auto' } : 'minmax(0, 1fr)'}
         >
-          {previousStep && <Button type="button" variant="outline" size="lg" minH="12" colorPalette="hse" px="3" onClick={() => goTo(previousStep)}>
+          {previous && <Button type="button" variant="outline" colorPalette="hse" minH="12" onClick={() => update({ stage: previous })}>
             <span aria-hidden="true">←</span> Назад
           </Button>}
-          <Button type="submit" size="lg" minH="12" colorPalette="hse" px="3" minW={{ md: '44' }} justifySelf={{ md: 'end' }} whiteSpace="normal" textAlign="center">
-            {nextStep ? 'Дальше' : 'Показать подборку'} <span aria-hidden="true">→</span>
-          </Button>
+          <Button type="button" minH="12" colorPalette="hse" justifySelf={{ md: 'end' }} minW={{ md: '44' }}
+            onClick={next ? () => update({ stage: next }) : showFeed}
+          >{next ? 'Дальше' : 'Посмотреть подборку'} <span aria-hidden="true">→</span></Button>
         </Grid>
-      </chakra.form>
+        {(next || index > 1) && (
+          <Flex wrap="wrap" justify={{ base: 'center', md: 'end' }} gap="2">
+            {next && <Button type="button" variant="plain" color="hse.fg" onClick={showFeed} size="sm">
+              {index || state.areas.length || state.own.length ? 'Уже показать подборку' : 'Посмотреть разные темы'}
+            </Button>}
+            {index > 1 && <Button type="button" variant="plain" color="hse.fg" size="sm" onClick={() => update({ stage: 'areas' })}>
+              Изменить интересы
+            </Button>}
+          </Flex>
+        )}
+      </Stack>
     </Stack>
   )
 }

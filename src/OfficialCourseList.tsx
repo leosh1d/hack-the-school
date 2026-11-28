@@ -7,7 +7,7 @@ const pageSize = 6
 
 export function OfficialCourseList({ heading, items }: {
   heading: string
-  items: readonly { course: OfficialCourse; reasons?: readonly string[] }[]
+  items: readonly { course: OfficialCourse; reasons?: readonly string[]; summary?: string; discovery?: boolean }[]
 }) {
   const [visibleCount, setVisibleCount] = useState(pageSize)
   const headingId = useId()
@@ -19,8 +19,8 @@ export function OfficialCourseList({ heading, items }: {
         <Text color="catalog.muted" fontSize="sm">Показано {Math.min(visibleCount, items.length)} из {items.length}</Text>
       </Flex>
       <Grid as="ul" role="list" layerStyle="catalogGrid">
-        {items.slice(0, visibleCount).map(({ course, reasons }) => (
-          <Box as="li" key={course.id} minW="0"><OfficialCourseCard course={course} reasons={reasons} /></Box>
+        {items.slice(0, visibleCount).map(item => (
+          <Box as="li" key={item.course.id} minW="0"><OfficialCourseCard {...item} /></Box>
         ))}
       </Grid>
       {visibleCount < items.length && (
