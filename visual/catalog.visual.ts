@@ -171,6 +171,14 @@ test('управление нагрузкой и её сохранение по�
   await wheel.hover()
   await page.mouse.wheel(0, -100)
   await expect(selected).toHaveText('До 4 ч')
+  await wheel.press('End')
+  const box = (await wheel.boundingBox())!
+  const x = box.x + box.width / 2
+  await page.mouse.move(x, box.y + 12)
+  await page.mouse.down()
+  await page.mouse.move(x, box.y + 108, { steps: 8 })
+  await page.mouse.up()
+  await expect(selected).toHaveText('До 4 ч')
   await next(page)
   await page.getByRole('button', { name: 'Назад' }).click()
   await expect(selected).toHaveText('До 4 ч')

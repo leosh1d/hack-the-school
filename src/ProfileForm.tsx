@@ -1,7 +1,7 @@
 import { Box, Button, Grid, Heading, Progress, Stack, Text, chakra } from '@chakra-ui/react'
 import { LazyMotion, domAnimation, useReducedMotion } from 'motion/react'
 import * as m from 'motion/react-m'
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type RefObject, type UIEvent } from 'react'
 import { careers, classes, formats, languages, skills, subjects, type StudentProfile } from './catalog.ts'
 import { CourseChat } from './CourseChat.tsx'
 import { profileForSurvey, surveySteps, type SurveyDecision, type SurveyDraft, type SurveyRoute, type SurveyStep } from './survey.ts'
@@ -121,9 +121,25 @@ function hourRowHeight(wheel: HTMLDivElement) {
   return wheel.firstElementChild?.getBoundingClientRect().height ?? 0
 }
 
+function nearestHour(top: number, rowHeight: number) {
+  return Math.max(0, Math.min(hours.length - 1, Math.round(top / rowHeight)))
+}
+
+type MouseDrag = {
+  pointerId: number
+  startY: number
+  startTop: number
+  lastY: number
+  lastAt: number
+  velocity: number
+  moved: boolean
+}
+
 function StudyHours({ value, onChange }: { value: number | null; onChange: (hours: number | null) => void }) {
   const reducedMotion = useReducedMotion()
   const wheelRef = useRef<HTMLDivElement>(null)
+  const drag = useRef<MouseDrag | null>(null)
+  const ignoreClick = useRef(false)
   const selection = hours.indexOf(value)
   const initialSelection = useRef(selection)
   const optionId = useId()
@@ -141,6 +157,61 @@ function StudyHours({ value, onChange }: { value: number | null; onChange: (hour
     const wheel = wheelRef.current
     if (wheel) wheel.scrollTop = index * hourRowHeight(wheel)
     updateSelection(index)
+  }
+
+  function syncScroll({ currentTarget: wheel }: UIEvent<HTMLDivElement>) {
+    const rowHeight = hourRowHeight(wheel)
+    if (rowHeight > 0) updateSelection(nearestHour(wheel.scrollTop, rowHeight))
+  }
+
+  function startDrag(event: PointerEvent<HTMLDivElement>) {
+    ignoreClick.current = false
+    if (event.pointerType !== 'mouse' || event.button !== 0) return
+    const y = event.clientY
+    drag.current = {
+      pointerId: event.pointerId, startY: y, startTop: event.currentTarget.scrollTop,
+      lastY: y, lastAt: performance.now(), velocity: 0, moved: false,
+    }
+  }
+
+  function moveDrag(event: PointerEvent<HTMLDivElement>) {
+    const current = drag.current
+    if (current?.pointerId !== event.pointerId || !(event.buttons & 1)) return
+    const wheel = event.currentTarget
+    const distance = current.startY - event.clientY
+    if (!current.moved) {
+      if (Math.abs(distance) < 4) return
+      current.moved = true
+      ignoreClick.current = true
+      wheel.setPointerCapture(event.pointerId)
+      wheel.dataset.dragging = ''
+    }
+    const now = performance.now()
+    current.velocity = (current.lastY - event.clientY) / Math.max(1, now - current.lastAt)
+    current.lastY = event.clientY
+    current.lastAt = now
+    wheel.scrollTop = current.startTop + distance
+  }
+
+  function finishDrag(event: PointerEvent<HTMLDivElement>) {
+    const current = drag.current
+    if (current?.pointerId !== event.pointerId) return
+    drag.current = null
+    if (!current.moved) return
+    const wheel = event.currentTarget
+    const height = hourRowHeight(wheel)
+    const top = wheel.scrollTop
+    const flick = event.type === 'pointerup' && !reducedMotion && performance.now() - current.lastAt < 75
+    const travel = flick ? Math.max(-2 * height, Math.min(2 * height, current.velocity * 115)) : 0
+    delete wheel.dataset.dragging
+    wheel.focus({ preventScroll: true })
+    if (!height) return
+    const target = nearestHour(top + travel, height)
+    if (target === nearestHour(top, height)) {
+      choose(target)
+    } else {
+      wheel.scrollTo({ top: target * height, behavior: 'smooth' })
+    }
   }
 
   function moveByKey(event: KeyboardEvent<HTMLDivElement>) {
@@ -168,13 +239,17 @@ function StudyHours({ value, onChange }: { value: number | null; onChange: (hour
           aria-activedescendant={`${optionId}-${selection}`}
           h="36" py="12" position="relative" overflowY="auto" scrollSnapType="y mandatory"
           scrollBehavior="auto" overscrollBehaviorY="contain" scrollbarWidth="none" borderRadius="md"
+          _dragging={{ scrollSnapType: 'none', cursor: 'grabbing' }}
           _focusVisible={{ outline: '2px solid', outlineColor: 'hse.700', outlineOffset: '2px' }}
           onKeyDown={moveByKey}
-          onScroll={({ currentTarget: wheel }) => {
-            const rowHeight = hourRowHeight(wheel)
-            if (rowHeight > 0) {
-              updateSelection(Math.max(0, Math.min(hours.length - 1, Math.round(wheel.scrollTop / rowHeight))))
-            }
+          onScroll={syncScroll}
+          onPointerDown={startDrag} onPointerMove={moveDrag}
+          onPointerUp={finishDrag} onPointerCancel={finishDrag} onLostPointerCapture={finishDrag}
+          onPointerLeave={() => { if (!drag.current?.moved) drag.current = null }}
+          onClickCapture={event => {
+            if (!ignoreClick.current) return
+            ignoreClick.current = false
+            event.stopPropagation()
           }}
         >
           {hours.map((hour, index) => {
@@ -182,7 +257,7 @@ function StudyHours({ value, onChange }: { value: number | null; onChange: (hour
             return (
               <Box
                 key={index} id={`${optionId}-${index}`} role="option" aria-selected={selected}
-                display="grid" placeItems="center" h="12" px="2" scrollSnapAlign="center" cursor="pointer"
+                display="grid" placeItems="center" h="12" px="2" scrollSnapAlign="center" cursor="inherit"
                 color={selected ? 'hse.fg' : 'catalog.muted'} fontWeight={selected ? 'bold' : 'medium'}
                 fontSize="md" textAlign="center" userSelect="none"
                 _motionSafe={{ transition: 'color 140ms ease-out' }}
@@ -191,8 +266,9 @@ function StudyHours({ value, onChange }: { value: number | null; onChange: (hour
                   choose(index)
                 }}
               >
-                <m.span initial={false} animate={{ scale: reducedMotion || !selected ? 1 : 1.06 }}
-                  transition={{ duration: reducedMotion ? 0 : 0.16, ease: 'easeOut' }}
+                <m.span initial={false}
+                  animate={{ scale: reducedMotion || !selected ? 1 : 1.06 }}
+                  transition={{ duration: reducedMotion ? 0 : 0.12, ease: 'easeOut' }}
                 >
                   {hour === null ? 'Без ограничений' : `До ${hour} ч`}
                 </m.span>
