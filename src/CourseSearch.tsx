@@ -1,17 +1,14 @@
 import { Box, Button, Flex, Grid, Heading, Input, Link, Stack, Text, chakra } from '@chakra-ui/react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { CourseCard } from './CourseCard.tsx'
-import { OfficialCourseCard } from './OfficialCourseCard.tsx'
+import { OfficialCourseList } from './OfficialCourseList.tsx'
 import { courses } from './catalog.ts'
 import { searchCourses } from './discovery.ts'
 import { loadOfficialCourses, officialCatalogUrl, searchOfficialCourses, type OfficialCourse } from './officialCatalog.ts'
 
-const pageSize = 6
-
 export function CourseSearch({ browse = false }: { browse?: boolean }) {
   const [input, setInput] = useState('')
   const [query, setQuery] = useState('')
-  const [visibleCount, setVisibleCount] = useState(pageSize)
   const [official, setOfficial] = useState<readonly OfficialCourse[] | 'unavailable' | null>(null)
   const shouldLoad = browse || Boolean(query)
   const officialMatches = official && official !== 'unavailable'
@@ -33,7 +30,6 @@ export function CourseSearch({ browse = false }: { browse?: boolean }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setQuery(input.trim())
-    setVisibleCount(pageSize)
   }
 
   return (
@@ -65,24 +61,12 @@ export function CourseSearch({ browse = false }: { browse?: boolean }) {
           {query && <Button type="button" variant="plain" size="xs" p="0" color="hse.solid" onClick={() => {
             setInput('')
             setQuery('')
-            setVisibleCount(pageSize)
           }}>Сбросить</Button>}
         </Flex>
       </Stack>
-      {officialMatches.length > 0 && <Stack as="section" aria-labelledby="official-courses-heading" gap="3">
-        <Flex align="center" justify="space-between" wrap="wrap" gap="2">
-          <Heading as="h2" size="md" id="official-courses-heading">Курсы ВШЭ</Heading>
-          <Text color="catalog.muted" fontSize="sm">Показано {Math.min(visibleCount, officialMatches.length)} из {officialMatches.length}</Text>
-        </Flex>
-        <Grid as="ul" role="list" layerStyle="catalogGrid">
-          {officialMatches.slice(0, visibleCount).map(course => <Box as="li" key={course.id} minW="0"><OfficialCourseCard course={course} /></Box>)}
-        </Grid>
-        {visibleCount < officialMatches.length && (
-          <Button type="button" colorPalette="hse" variant="outline" alignSelf={{ base: 'stretch', sm: 'start' }}
-            onClick={() => setVisibleCount(current => current + pageSize)}
-          >Показать ещё</Button>
-        )}
-      </Stack>}
+      {officialMatches.length > 0 && (
+        <OfficialCourseList key={query} heading="Курсы ВШЭ" items={officialMatches.map(course => ({ course }))} />
+      )}
       {demoMatches.length > 0 && <Stack as="section" aria-labelledby="demo-courses-heading" gap="3">
         <Heading as="h2" size="md" id="demo-courses-heading">Демокурсы</Heading>
         <Text color="catalog.muted" fontSize="sm">Даты, места и запись приведены для примера.</Text>

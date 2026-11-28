@@ -2,7 +2,7 @@ import { Box, Button, Card, Grid, Text } from '@chakra-ui/react'
 import { useId } from 'react'
 import type { OfficialCourse } from './officialCatalog.ts'
 
-export function OfficialCourseCard({ course }: { course: OfficialCourse }) {
+export function OfficialCourseCard({ course, reasons }: { course: OfficialCourse; reasons?: readonly string[] }) {
   const headingId = useId()
   const facts = [
     ['Учебный год', course.academicYear],
@@ -23,6 +23,14 @@ export function OfficialCourseCard({ course }: { course: OfficialCourse }) {
           {course.department && <Text>{course.department}</Text>}
           {course.faculty && course.faculty !== course.department && <Text>{course.faculty}</Text>}
         </Box>}
+        {reasons && reasons.length > 0 && (
+          <Box bg="hse.50" borderStartWidth="2px" borderColor="hse.solid" borderRadius="sm" px="3" py="2" fontSize="sm">
+            <Text fontWeight="semibold" mb="1">Почему в подборке</Text>
+            <Box as="ul" listStyle="disc" ps="4">
+              {reasons.map(reason => <Box as="li" key={reason}>{reason}</Box>)}
+            </Box>
+          </Box>
+        )}
         <Grid as="dl" templateColumns="repeat(2, minmax(0, 1fr))" gap="2.5" borderTopWidth="1px" borderColor="catalog.border" pt="2.5" mt="auto">
           {facts.map(([label, value]) => value !== undefined && (
             <Box key={label}>

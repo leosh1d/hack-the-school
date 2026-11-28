@@ -1,43 +1,17 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const next = (page: Page) => page.getByRole('button', { name: 'Дальше' }).click()
-const choose = (page: Page, name: string) => page.getByRole('radio', { name, exact: true }).check()
 const check = (page: Page, name: string) => page.getByRole('checkbox', { name, exact: true }).check()
 
-async function chooseSql(page: Page) {
+async function chooseCoding(page: Page) {
   await check(page, 'Навыки')
   await next(page)
-  await check(page, 'SQL')
+  await check(page, 'Программирование')
   await next(page)
 }
 
-const hoursWheel = (page: Page) => page.getByRole('listbox', { name: 'Сколько времени в неделю вы готовы уделять?' })
-
-async function answerConditions(page: Page, { limitToThreeHours, format }: { limitToThreeHours?: boolean; format?: string } = {}) {
-  await next(page)
-  if (limitToThreeHours) {
-    const wheel = hoursWheel(page)
-    await wheel.press('Home')
-    await wheel.press('ArrowDown')
-    await expect(wheel.getByRole('option', { selected: true })).toHaveText('До 3 ч')
-  }
-  await next(page)
-  if (format) await check(page, format)
-  await next(page)
-  await next(page)
-  await next(page)
-}
-
-async function skipAcademicProfile(page: Page) {
-  await choose(page, 'Пропустить профиль')
-  await page.getByRole('button', { name: 'Показать подборку' }).click()
-}
-
-async function goToFormat(page: Page) {
-  await chooseSql(page)
-  await next(page)
-  await next(page)
-}
+const hoursWheel = (page: Page) => page.getByRole('listbox', { name: 'Сколько контактных часов вы готовы выделить?' })
+const showResults = (page: Page) => page.getByRole('button', { name: 'Показать подборку' }).click()
 
 async function expectScreen(page: Page, name: string, options?: { threshold: number }) {
   await page.mouse.move(0, 0)
@@ -70,7 +44,7 @@ test('анкета подбора', async ({ page, isMobile }) => {
   await expect(nav.getByRole('button')).toHaveCount(2)
   expect(await nav.getByRole('button', { name: 'Подбор' }).boundingBox()).toMatchObject({ x: 0, width: halfWidth })
   expect(await nav.getByRole('button', { name: 'Каталог' }).boundingBox()).toMatchObject({ x: halfWidth, width: halfWidth })
-  await expect(page.getByRole('checkbox', { name: 'Карьерные интересы' })).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: 'Интересы' })).toBeVisible()
   await expect(page.getByRole('checkbox', { name: 'Навыки' })).toBeVisible()
   await expect(page.getByRole('progressbar', { name: 'Ход анкеты' })).toHaveAttribute('aria-valuetext', /^Шаг 1, \d+%$/)
   await expect(page.getByRole('button', { name: 'Дальше' })).toBeInViewport()
@@ -80,27 +54,37 @@ test('анкета подбора', async ({ page, isMobile }) => {
 })
 
 test('подборка с объяснениями', async ({ page }) => {
-  await check(page, 'Карьерные интересы')
+  await check(page, 'Интересы')
   await check(page, 'Навыки')
   await next(page)
-  await check(page, 'Бизнес-аналитика')
+  await check(page, 'Технологии и ИИ')
   await next(page)
-  await check(page, 'SQL')
+  await check(page, 'Создание продуктов и проектов')
   await next(page)
-  await answerConditions(page, { limitToThreeHours: true })
-  await skipAcademicProfile(page)
+  await hoursWheel(page).press('Home')
+  await hoursWheel(page).press('ArrowDown')
+  await next(page)
+  await check(page, '1-й модуль')
+  await check(page, '2-й модуль')
+  await next(page)
+  await check(page, 'Русский')
+  await showResults(page)
 
   await expect(page.getByRole('heading', { name: 'Ваша подборка' })).toBeVisible()
-  const dataCourse = page.getByRole('article', { name: 'Данные для бизнеса' })
-  await expect(dataCourse.getByText('Навык — SQL')).toBeVisible()
-  await expect(page.getByRole('article', { name: 'Маркетинговые решения на данных' })).toBeVisible()
+  const course = page.getByRole('article', { name: /Вайб-кодинг/ })
+  await expect(course.getByText('Интерес — Технологии и ИИ')).toBeVisible()
+  await expect(course.getByText('Навык — Создание продуктов и проектов')).toBeVisible()
+  await expect(page.getByRole('article', { name: /Автоматизация сложных процессов/ })).toBeVisible()
   await expectScreen(page, '02-recommendations.png')
 })
 
 test('поиск без совпадений', async ({ page }) => {
-  await chooseSql(page)
-  await answerConditions(page, { format: 'Очно' })
-  await skipAcademicProfile(page)
+  await chooseCoding(page)
+  await next(page)
+  await check(page, '2-й модуль')
+  await next(page)
+  await check(page, 'Английский')
+  await showResults(page)
   await expect(page.getByRole('heading', { name: 'Подходящих курсов пока нет' })).toBeVisible()
 
   await page.getByRole('searchbox', { name: 'Запрос по каталогу' }).fill('кристаллография')
@@ -110,9 +94,10 @@ test('поиск без совпадений', async ({ page }) => {
 })
 
 test('разбор ответа в самопроверке', async ({ page }) => {
-  await chooseSql(page)
-  await answerConditions(page)
-  await skipAcademicProfile(page)
+  await page.getByRole('button', { name: 'Каталог', exact: true }).click()
+  const query = page.getByRole('searchbox', { name: 'Запрос по каталогу' })
+  await query.fill('данные бизнеса')
+  await query.press('Enter')
   const course = page.getByRole('article', { name: 'Данные для бизнеса' })
 
   await course.getByText('Проверить себя', { exact: true }).click()
@@ -123,16 +108,16 @@ test('разбор ответа в самопроверке', async ({ page }) =
 })
 
 test('промежуточный вопрос о навыках', async ({ page, isMobile }) => {
-  await check(page, 'Карьерные интересы')
+  await check(page, 'Интересы')
   await check(page, 'Навыки')
   await next(page)
-  await check(page, 'Бизнес-аналитика')
+  await check(page, 'Данные и математика')
   await next(page)
-  await check(page, 'SQL')
+  await check(page, 'Программирование')
 
   await expect(page.getByText('Шаг 3', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Какие навыки хотите развить?' })).toBeVisible()
-  await expect(page.getByRole('checkbox', { name: 'Бизнес-аналитика' })).toHaveCount(0)
+  await expect(page.getByRole('checkbox', { name: 'Данные и математика' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Назад' })).toBeInViewport()
   await expect(page.getByRole('button', { name: 'Дальше' })).toBeInViewport()
   if (isMobile) await expectNextNearBottom(page)
@@ -154,30 +139,28 @@ test('ответ чата до заполнения анкеты', async ({ page
   await expectScreen(page, '06-course-chat.png', { threshold: 0 })
 })
 
-test('вопрос об опыте в выбранных темах сразу после навыков', async ({ page }) => {
-  await chooseSql(page)
-
-  await expect(page.getByRole('heading', { name: 'Какой у вас опыт в выбранных темах?', level: 1 })).toBeFocused()
-  await expect(page.getByText('Ваши темы — SQL.', { exact: true })).toBeVisible()
-  await expect(page.getByRole('radio', { name: 'Решаю задачи по инструкции или с помощью' })).toBeVisible()
-  await expect(page.getByRole('radio', { name: 'Не указывать' })).toBeChecked()
-  await expectScreen(page, '07-survey-level.png')
+test('выбор темы в ветке интересов', async ({ page }) => {
+  await check(page, 'Интересы')
+  await next(page)
+  await expect(page.getByRole('heading', { name: 'Какие темы вам интересны?', level: 1 })).toBeFocused()
+  await check(page, 'Данные и математика')
+  await expect(page.getByRole('checkbox', { name: 'Данные и математика' })).toBeChecked()
+  await expectScreen(page, '07-survey-interests.png')
 })
 
 test('управление нагрузкой и её сохранение после возврата', async ({ page, isMobile }) => {
-  await chooseSql(page)
-  await next(page)
+  await chooseCoding(page)
   const wheel = hoursWheel(page)
   const selected = wheel.getByRole('option', { selected: true })
   await expect(selected).toHaveText('Без ограничений')
-  await expect(page.getByRole('progressbar', { name: 'Ход анкеты' })).toHaveAttribute('aria-valuetext', /^Шаг 4, \d+%$/)
+  await expect(page.getByRole('progressbar', { name: 'Ход анкеты' })).toHaveAttribute('aria-valuetext', /^Шаг 3, \d+%$/)
   await wheel.press('Home')
-  await expect(selected).toHaveText('До 2 ч')
+  await expect(selected).toHaveText('До 30 ч')
   await wheel.press('End')
   await expect(selected).toHaveText('Без ограничений')
   await wheel.hover()
   await page.mouse.wheel(0, -100)
-  await expect(selected).toHaveText('До 4 ч')
+  await expect(selected).toHaveText('До 60 ч')
   await wheel.press('End')
   const box = (await wheel.boundingBox())!
   const x = box.x + box.width / 2
@@ -185,60 +168,35 @@ test('управление нагрузкой и её сохранение по�
   await page.mouse.down()
   await page.mouse.move(x, box.y + 108, { steps: 8 })
   await page.mouse.up()
-  await expect(selected).toHaveText('До 4 ч')
+  await expect(selected).toHaveText('До 60 ч')
   await next(page)
   await page.getByRole('button', { name: 'Назад' }).click()
-  await expect(selected).toHaveText('До 4 ч')
+  await expect(selected).toHaveText('До 60 ч')
   await expect(selected).toBeInViewport({ ratio: 1 })
   if (isMobile) await expectNextNearBottom(page)
   await expectScreen(page, '08-survey-hours.png')
 })
 
-test('два формата занятий после возврата', async ({ page }) => {
-  await goToFormat(page)
-  await check(page, 'Онлайн')
-  await check(page, 'Очно')
+test('выбранные модули после возврата', async ({ page }) => {
+  await chooseCoding(page)
+  await next(page)
+  await check(page, '3-й модуль')
+  await check(page, '4-й модуль')
   await next(page)
   await page.getByRole('button', { name: 'Назад' }).click()
-  await expect(page.getByRole('checkbox', { name: 'Онлайн' })).toBeChecked()
-  await expect(page.getByRole('checkbox', { name: 'Очно' })).toBeChecked()
-  await expectScreen(page, '09-survey-format.png')
-})
-
-test('выбор вида занятий', async ({ page }) => {
-  await goToFormat(page)
-  await next(page)
-  await check(page, 'Семинары')
-  await expect(page.getByRole('checkbox', { name: 'Семинары' })).toBeChecked()
-  await expect(page.getByRole('checkbox', { name: 'Лекции' })).not.toBeChecked()
-  await expectScreen(page, '10-survey-class-type.png')
+  await expect(page.getByRole('checkbox', { name: '3-й модуль' })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: '4-й модуль' })).toBeChecked()
+  await expectScreen(page, '09-survey-modules.png')
 })
 
 test('выбор языка курса', async ({ page }) => {
-  await goToFormat(page)
+  await chooseCoding(page)
   await next(page)
   await next(page)
   await check(page, 'Английский')
   await expect(page.getByRole('checkbox', { name: 'Английский' })).toBeChecked()
   await expect(page.getByRole('checkbox', { name: 'Русский' })).not.toBeChecked()
   await expectScreen(page, '11-survey-language.png')
-})
-
-test('поиск одноимённых программ в разных кампусах', async ({ page }) => {
-  await chooseSql(page)
-  await answerConditions(page)
-  await choose(page, 'Заполнить учебный профиль')
-  await next(page)
-
-  const program = page.getByRole('combobox', { name: 'На какой программе вы учитесь?' })
-  await program.fill('бизнес-информ')
-  const moscow = page.getByRole('option', { name: /^Бизнес-информатика Москва · Бакалавриат$/ })
-  await expect(moscow).toBeVisible()
-  await expect(page.getByRole('option', { name: /^Бизнес-информатика Санкт-Петербург · Бакалавриат$/ })).toBeVisible()
-  await expect(page.getByRole('option', { name: /^Управление бизнесом/ })).toHaveCount(0)
-  await program.press('ArrowDown')
-  await expect(moscow).toHaveAttribute('data-highlighted', '')
-  await expectScreen(page, '12-survey-program.png')
 })
 
 test('поиск по официальному каталогу ВШЭ', async ({ page }) => {

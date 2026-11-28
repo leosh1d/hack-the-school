@@ -1,41 +1,27 @@
-import { emptyProfile, type StudentProfile } from './catalog.ts'
+import type { OfficialPreferences } from './officialRecommendations.ts'
 
-export type SurveyRoute = 'careers' | 'skills' | 'both'
-export type SurveyDecision = 'yes' | 'skip'
+export type SurveyRoute = 'topics' | 'skills' | 'both'
+export type SurveyStep = 'route' | 'topics' | 'skills' | 'maxContactHours' | 'modules' | 'language'
 
 export type SurveyDraft = {
   route: SurveyRoute | ''
-  academic: SurveyDecision | ''
-  profile: StudentProfile
+  profile: OfficialPreferences
 }
 
-export const emptySurvey: SurveyDraft = { route: '', academic: '', profile: emptyProfile }
-
-const conditionSteps = ['level', 'maxHours', 'format', 'classType', 'language'] as const
-const academicSteps = ['program', 'year', 'completed'] as const
-
-export type SurveyStep = 'route' | 'careers' | 'skills' | 'academic'
-  | typeof conditionSteps[number] | typeof academicSteps[number]
-
-export function surveySteps(draft: SurveyDraft): SurveyStep[] {
-  const interests = {
-    careers: ['careers'], skills: ['skills'], both: ['careers', 'skills'], '': [],
-  } as const
-
-  return [
-    'route',
-    ...interests[draft.route],
-    ...conditionSteps,
-    'academic',
-    ...(draft.academic === 'yes' ? academicSteps : []),
-  ]
+export const emptySurvey: SurveyDraft = {
+  route: '',
+  profile: { topics: [], skills: [], maxContactHours: null, modules: [], languages: [] },
 }
 
-export function profileForSurvey({ route, academic, profile }: SurveyDraft): StudentProfile {
+export function surveySteps(route: SurveyDraft['route']): SurveyStep[] {
+  const interests = { topics: ['topics'], skills: ['skills'], both: ['topics', 'skills'], '': [] } as const
+  return ['route', ...interests[route], 'maxContactHours', 'modules', 'language']
+}
+
+export function profileForSurvey({ route, profile }: SurveyDraft): OfficialPreferences {
   return {
     ...profile,
-    careers: route === 'careers' || route === 'both' ? profile.careers : emptyProfile.careers,
-    skills: route === 'skills' || route === 'both' ? profile.skills : emptyProfile.skills,
-    ...(academic === 'yes' ? {} : { program: emptyProfile.program, year: emptyProfile.year, completed: emptyProfile.completed }),
+    topics: route === 'topics' || route === 'both' ? profile.topics : [],
+    skills: route === 'skills' || route === 'both' ? profile.skills : [],
   }
 }

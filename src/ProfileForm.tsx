@@ -1,58 +1,30 @@
 import { Box, Button, Grid, Heading, Progress, Stack, Text, chakra } from '@chakra-ui/react'
 import { LazyMotion, domAnimation, useReducedMotion } from 'motion/react'
 import * as m from 'motion/react-m'
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type RefObject, type UIEvent } from 'react'
-import { careers, classes, formats, languages, skills, subjects, type StudentProfile } from './catalog.ts'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type RefObject, type UIEvent } from 'react'
+import { languages } from './catalog.ts'
 import { CourseChat } from './CourseChat.tsx'
-import { profileForSurvey, surveySteps, type SurveyDecision, type SurveyDraft, type SurveyRoute, type SurveyStep } from './survey.ts'
+import { modules, skills, topics, type OfficialPreferences } from './officialRecommendations.ts'
+import { surveySteps, type SurveyDraft, type SurveyRoute, type SurveyStep } from './survey.ts'
 
 const optionalChoices = 'Отметьте подходящие варианты или пропустите вопрос.'
-const ProgramPicker = lazy(() => import('./ProgramPicker.tsx'))
 
 const questions = {
-  route: { title: 'По чему подобрать факультативы?', description: 'Выберите карьерные направления, конкретные навыки или оба варианта.' },
-  careers: { title: 'Какие направления вам интересны?', description: 'Выберите хотя бы одно направление.' },
+  route: { title: 'По чему подобрать факультативы?', description: 'Выберите интересы, навыки или оба варианта.' },
+  topics: { title: 'Какие темы вам интересны?', description: 'Выберите хотя бы одну тему.' },
   skills: { title: 'Какие навыки хотите развить?', description: 'Выберите хотя бы один навык.' },
-  level: { title: 'Какой у вас опыт в выбранных темах?' },
-  maxHours: { title: 'Сколько времени в неделю вы готовы уделять?' },
-  format: { title: 'Какой формат занятий вам подходит?', description: optionalChoices },
-  classType: { title: 'Какой вид занятий предпочитаете?', description: optionalChoices },
+  maxContactHours: { title: 'Сколько контактных часов вы готовы выделить?', description: 'Объём занятий за весь курс.' },
+  modules: { title: 'В каких модулях вы можете учиться?', description: 'Выберите все подходящие модули или пропустите вопрос.' },
   language: { title: 'На каком языке хотите учиться?', description: optionalChoices },
-  academic: { title: 'Учесть ваш учебный профиль?', description: 'Программа, курс и пройденные дисциплины помогут учесть ваш опыт.' },
-  program: { title: 'На какой программе вы учитесь?' },
-  year: { title: 'На каком курсе вы учитесь?' },
-  completed: { title: 'Какие дисциплины вы уже прошли?', description: 'Можно выбрать несколько или перейти к подборке.' },
 } satisfies Record<SurveyStep, { title: string; description?: string }>
 
 const routeChoices = {
-  careers: 'Карьерные интересы', skills: 'Навыки',
+  topics: 'Интересы', skills: 'Навыки',
 } satisfies Record<Exclude<SurveyRoute, 'both'>, string>
 
-const experienceChoices = {
-  start: 'Только знакомлюсь с темой',
-  practice: 'Решаю задачи по инструкции или с помощью',
-  advanced: 'Самостоятельно решаю задачи на практике',
-} satisfies Record<Exclude<StudentProfile['level'], ''>, string>
+const hours: readonly (number | null)[] = [30, 40, 60, 80, null]
 
-const academicChoices = { yes: 'Заполнить учебный профиль', skip: 'Пропустить профиль' } satisfies Record<SurveyDecision, string>
-
-const hours: readonly (number | null)[] = [2, 3, 4, 5, null]
-const years = { '1': '1 курс', '2': '2 курс', '3': '3 курс', '4': '4 курс' } as const
-
-function describeExperience(draft: SurveyDraft) {
-  const activeProfile = profileForSurvey(draft)
-  const topics = [
-    ...activeProfile.careers.map(career => careers[career]),
-    ...activeProfile.skills.map(skill => skills[skill]),
-  ]
-
-  if (topics.length) {
-    return `Ваши темы — ${topics.slice(0, 2).join(', ')}${topics.length > 2 ? ' и другие выбранные темы' : ''}.`
-  }
-}
-
-function Choice({ type, checked, title, onChange, card = false }: {
-  type: 'radio' | 'checkbox'
+function Choice({ checked, title, onChange, card = false }: {
   checked: boolean
   title: string
   onChange: (checked: boolean) => void
@@ -72,7 +44,7 @@ function Choice({ type, checked, title, onChange, card = false }: {
       }}
     >
       <chakra.input
-        type={type} name={type === 'radio' ? 'survey-answer' : undefined}
+        type="checkbox"
         checked={checked} onChange={event => onChange(event.target.checked)}
         boxSize="4" flexShrink="0" accentColor="hse.solid"
         _focusVisible={{ outline: '2px solid', outlineColor: 'hse.700', outlineOffset: '2px' }}
@@ -91,29 +63,11 @@ function MultipleChoices<Key extends string>({ options, selected, onChange, card
   return (
     <Grid gap="2" templateColumns={cards ? 'repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr))' : 'minmax(0, 1fr)'}>
       {(Object.entries(options) as [Key, string][]).map(([value, title]) => (
-        <Choice key={value} type="checkbox" card={cards} title={title} checked={selected.includes(value)} onChange={checked => {
+        <Choice key={value} card={cards} title={title} checked={selected.includes(value)} onChange={checked => {
           onChange(checked ? [...selected, value] : selected.filter(item => item !== value))
         }} />
       ))}
     </Grid>
-  )
-}
-
-function SingleChoice<Key extends string>({ options, selected, onChange, emptyOption }: {
-  options: Record<Key, string>
-  selected: string
-  onChange: (selected: Key | '') => void
-  emptyOption?: string
-}) {
-  const optionsWithLabel: readonly [Key | '', string][] = Object.entries(options) as [Key, string][]
-  const items = emptyOption ? [...optionsWithLabel, ['', emptyOption] as const] : optionsWithLabel
-
-  return (
-    <Stack gap="2">
-      {items.map(([value, title]) => (
-        <Choice key={value} type="radio" title={title} checked={selected === value} onChange={() => onChange(value)} />
-      ))}
-    </Stack>
   )
 }
 
@@ -290,18 +244,16 @@ export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
   const [step, setStep] = useState<SurveyStep>('route')
   const [error, setError] = useState('')
   const focusNext = useRef(false)
-  const steps = surveySteps(draft)
+  const steps = surveySteps(draft.route)
   const stepIndex = steps.indexOf(step)
-  const progressMax = surveySteps({ ...draft, route: step === 'route' ? 'both' : draft.route, academic: 'yes' }).length
+  const progressMax = step === 'route' ? surveySteps('both').length : steps.length
   const progressPercent = Math.round((stepIndex + 1) / progressMax * 100)
   const nextStep = steps[stepIndex + 1]
   const previousStep = steps[stepIndex - 1]
-  const showResults = step === 'completed' || (step === 'academic' && draft.academic === 'skip')
-  const question: { title: string; description?: string } = questions[step]
-  const description = step === 'level' ? describeExperience(draft) : question.description
+  const { title, description } = questions[step]
   const { profile } = draft
   const selectedRoutes: (keyof typeof routeChoices)[] = draft.route === 'both'
-    ? ['careers', 'skills']
+    ? ['topics', 'skills']
     : draft.route ? [draft.route] : []
 
   useEffect(() => {
@@ -316,7 +268,7 @@ export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
     setError('')
   }
 
-  function updateProfile<Key extends keyof StudentProfile>(field: Key, value: StudentProfile[Key]) {
+  function updateProfile<Key extends keyof OfficialPreferences>(field: Key, value: OfficialPreferences[Key]) {
     update({ profile: { ...profile, [field]: value } })
   }
 
@@ -330,10 +282,8 @@ export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
     event.preventDefault()
     const errors: Partial<Record<SurveyStep, string>> = {
       route: draft.route ? '' : 'Выберите, по чему подобрать курсы.',
-      careers: profile.careers.length ? '' : 'Выберите хотя бы одно направление.',
+      topics: profile.topics.length ? '' : 'Выберите хотя бы одну тему.',
       skills: profile.skills.length ? '' : 'Выберите хотя бы один навык.',
-      academic: draft.academic ? '' : 'Выберите, учитывать ли учебный профиль.',
-      program: profile.program ? '' : 'Выберите программу из списка.',
     }
 
     if (errors[step]) {
@@ -354,21 +304,11 @@ export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
           <CourseChat />
         </Stack>
       )
-      case 'careers': return <MultipleChoices options={careers} selected={profile.careers} onChange={value => updateProfile('careers', value)} />
+      case 'topics': return <MultipleChoices options={topics} selected={profile.topics} onChange={value => updateProfile('topics', value)} />
       case 'skills': return <MultipleChoices options={skills} selected={profile.skills} onChange={value => updateProfile('skills', value)} />
-      case 'level': return <SingleChoice options={experienceChoices} selected={profile.level} onChange={value => updateProfile('level', value)} emptyOption="Не указывать" />
-      case 'maxHours': return <StudyHours value={profile.maxHours} onChange={value => updateProfile('maxHours', value)} />
-      case 'format': return <MultipleChoices cards options={formats} selected={profile.formats} onChange={value => updateProfile('formats', value)} />
-      case 'classType': return <MultipleChoices cards options={classes} selected={profile.classTypes} onChange={value => updateProfile('classTypes', value)} />
+      case 'maxContactHours': return <StudyHours value={profile.maxContactHours} onChange={value => updateProfile('maxContactHours', value)} />
+      case 'modules': return <MultipleChoices cards options={modules} selected={profile.modules} onChange={value => updateProfile('modules', value)} />
       case 'language': return <MultipleChoices cards options={languages} selected={profile.languages} onChange={value => updateProfile('languages', value)} />
-      case 'academic': return <SingleChoice options={academicChoices} selected={draft.academic} onChange={academic => update({ academic })} />
-      case 'program': return (
-        <Suspense fallback={<Text role="status" color="catalog.muted">Загружаем список программ…</Text>}>
-          <ProgramPicker value={profile.program} invalid={Boolean(error)} onChange={value => updateProfile('program', value)} />
-        </Suspense>
-      )
-      case 'year': return <SingleChoice options={years} selected={String(profile.year ?? '')} onChange={value => updateProfile('year', value ? Number(value) : null)} emptyOption="Не указывать" />
-      case 'completed': return <MultipleChoices options={subjects} selected={profile.completed} onChange={value => updateProfile('completed', value)} />
     }
   }
 
@@ -389,7 +329,7 @@ export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
           _motionSafe={{ animationName: 'fade-in, slide-from-bottom', animationDuration: 'fast', animationTimingFunction: 'ease-out' }}
         >
           <Heading as="h1" id="survey-question" tabIndex={-1} ref={headingRef} size={{ base: 'xl', md: '3xl' }} mb={description ? '2' : '5'} _focusVisible={{ outline: 'none' }}>
-            {question.title}
+            {title}
           </Heading>
           {description && <Text color="catalog.muted" id="survey-description" mb="5" fontSize="sm">{description}</Text>}
           {renderChoices()}
@@ -405,7 +345,7 @@ export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
             <span aria-hidden="true">←</span> Назад
           </Button>}
           <Button type="submit" size="lg" minH="12" colorPalette="hse" px="3" minW={{ md: '44' }} justifySelf={{ md: 'end' }} whiteSpace="normal" textAlign="center">
-            {showResults ? 'Показать подборку' : 'Дальше'} <span aria-hidden="true">→</span>
+            {nextStep ? 'Дальше' : 'Показать подборку'} <span aria-hidden="true">→</span>
           </Button>
         </Grid>
       </chakra.form>
