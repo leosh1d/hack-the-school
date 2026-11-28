@@ -11,8 +11,8 @@ type View = 'profile' | 'results' | 'catalog'
 
 const pageTitles = { results: 'Ваша подборка', catalog: 'Каталог факультативов' }
 const pageDescriptions = {
-  results: 'Курсы с открытой записью, которые совпали с вашими интересами и условиями обучения.',
-  catalog: 'Посмотрите все курсы прототипа, сравните формат и попробуйте задания.',
+  results: 'Подборка по демокаталогу. Даты, места и условия записи приведены для примера.',
+  catalog: 'Общеуниверситетские факультативы московского кампуса ВШЭ на 2026/2027 учебный год.',
 }
 
 const markColors = ['hse.solid', 'gsb.solid', 'hse.solid', 'hse.300']
@@ -119,14 +119,7 @@ function App() {
         </Stack>}
 
         {view === 'catalog' && <Stack gap="4">
-          <Flex wrap="wrap" align="center" justify="space-between" gap="2">
-            <Heading as="h2" size="md">Все курсы <Box as="span" ml="1" fontSize="sm" color="catalog.muted">{courses.length}</Box></Heading>
-            <Button type="button" variant="plain" size="sm" p="0" color="hse.solid" onClick={() => navigate('profile')}>К анкете</Button>
-          </Flex>
-          <Grid as="ul" role="list" layerStyle="catalogGrid">
-            {courses.map(course => <Box as="li" minW="0" key={course.id}><CourseCard course={course} /></Box>)}
-          </Grid>
-          <CourseSearch />
+          <CourseSearch browse />
         </Stack>}
       </Container>
     </Box>

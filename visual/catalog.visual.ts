@@ -144,6 +144,7 @@ test('ответ чата до заполнения анкеты', async ({ page
   const replies = dialog.getByRole('log')
   await expect(replies.getByText('интервью с клиентами', { exact: true })).toBeVisible()
   await expect(replies.getByText('Интервью с клиентами', { exact: true })).toBeVisible()
+  await expect(replies.getByText('Ищем по каталогу ВШЭ…')).toHaveCount(0)
   await expectScreen(page, '06-course-chat.png', { threshold: 0 })
 })
 
@@ -232,4 +233,18 @@ test('поиск одноимённых программ в разных кам�
   await program.press('ArrowDown')
   await expect(moscow).toHaveAttribute('data-highlighted', '')
   await expectScreen(page, '12-survey-program.png')
+})
+
+test('поиск по официальному каталогу ВШЭ', async ({ page }) => {
+  await page.getByRole('button', { name: 'Каталог', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Курсы ВШЭ' })).toBeVisible()
+  const query = page.getByRole('searchbox', { name: 'Запрос по каталогу' })
+  await query.fill('анализ дан инфограф')
+  await query.press('Enter')
+
+  const official = page.getByRole('article', { name: 'Анализ данных и инфографика в корпоративных системах управления' })
+  await expect(official.getByRole('link', { name: 'Открыть на сайте ВШЭ' })).toHaveAttribute('href', 'https://www.hse.ru/edu/courses/1189299392')
+  await expect(official.getByText('Контактные часы')).toBeVisible()
+  await expect(page.getByRole('status')).toContainText('Совпадений по запросу «анализ дан инфограф»: 1')
+  await expectScreen(page, '13-official-catalog.png')
 })

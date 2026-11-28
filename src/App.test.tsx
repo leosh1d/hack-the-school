@@ -77,7 +77,7 @@ test('принимает запрос в чате до заполнения ан
   expect(within(log).getByText('интервью с клиентами', { exact: true })).toBeVisible()
   expect(within(log).getByText('Интервью с клиентами', { exact: true })).toBeVisible()
   await user.type(input, 'кристаллография{Enter}')
-  expect(within(log).getByText('По этому запросу курсы не найдены.')).toBeVisible()
+  expect(await within(log).findByText('По этому запросу курсы не найдены.')).toBeVisible()
 
   await user.click(within(dialog).getByRole('button', { name: 'Закрыть чат' }))
   await waitFor(() => expect(open).toHaveFocus())
@@ -91,6 +91,44 @@ test('принимает запрос в чате до заполнения ан
   expect(screen.getByRole('checkbox', { name: 'Навыки' })).toBeChecked()
   await next(user)
   expect(screen.getByRole('heading', { name: 'Какие навыки хотите развить?' })).toHaveFocus()
+})
+
+test('показывает ссылку на официальный курс в чате по части названия', async () => {
+  const user = userEvent.setup()
+  renderWithChakra(<App />)
+  await user.click(screen.getByRole('button', { name: 'Расскажу в чате' }))
+
+  const dialog = await screen.findByRole('dialog', { name: 'Чат по факультативам' })
+  await user.type(within(dialog).getByRole('textbox', { name: 'Запрос по каталогу' }), 'инфограф{Enter}')
+  const course = await within(dialog).findByRole('link', { name: 'Анализ данных и инфографика в корпоративных системах управления' })
+  expect(course).toHaveAttribute('href', 'https://www.hse.ru/edu/courses/1189299392')
+})
+
+test('находит официальный курс в каталоге и показывает данные со страницы ВШЭ', async () => {
+  const user = userEvent.setup()
+  renderWithChakra(<App />)
+  await user.click(screen.getByRole('button', { name: 'Каталог' }))
+
+  const more = await screen.findByRole('button', { name: 'Показать ещё' })
+  const official = within(screen.getByRole('region', { name: 'Курсы ВШЭ' }))
+  expect(official.getAllByRole('article')).toHaveLength(6)
+  await user.click(more)
+  expect(official.getAllByRole('article')).toHaveLength(12)
+  await user.type(screen.getByRole('searchbox', { name: 'Запрос по каталогу' }), 'анализ дан инфограф')
+  await user.click(screen.getByRole('button', { name: 'Найти' }))
+  const course = within(await screen.findByRole('article', { name: 'Анализ данных и инфографика в корпоративных системах управления' }))
+  expect(course.getByRole('link', { name: 'Открыть на сайте ВШЭ' })).toHaveAttribute('href', 'https://www.hse.ru/edu/courses/1189299392')
+  expect(course.getByText('Департамент компьютерной инженерии')).toBeVisible()
+  expect(course.getByText('100', { exact: true })).toBeVisible()
+  expect(course.getByText('6', { exact: true })).toBeVisible()
+  expect(course.queryByText(/дедлайн|места|в неделю/i)).not.toBeInTheDocument()
+  const request = screen.getByRole('searchbox', { name: 'Запрос по каталогу' })
+  await user.clear(request)
+  await user.type(request, 'курс по ИИ')
+  await user.click(screen.getByRole('button', { name: 'Найти' }))
+  expect(await screen.findByRole('article', { name: /Автоматизация сложных процессов с no-code/ })).toBeVisible()
+  await user.click(screen.getByRole('button', { name: 'Сбросить' }))
+  expect(official.getAllByRole('article')).toHaveLength(6)
 })
 
 test('подбирает факультатив по выбранному навыку и объясняет рекомендацию', async () => {
@@ -298,9 +336,15 @@ test('уточняет пустую подборку запросом и соо�
   expect(screen.getByRole('heading', { name: 'Интервью с клиентами' })).toBeVisible()
 
   await user.clear(query)
+  await user.type(query, 'инфограф')
+  await user.click(screen.getByRole('button', { name: 'Найти' }))
+  const official = within(await screen.findByRole('article', { name: 'Анализ данных и инфографика в корпоративных системах управления' }))
+  expect(official.getByRole('link', { name: 'Открыть на сайте ВШЭ' })).toHaveAttribute('href', 'https://www.hse.ru/edu/courses/1189299392')
+
+  await user.clear(query)
   await user.type(query, 'кристаллография')
   await user.click(screen.getByRole('button', { name: 'Найти' }))
-  expect(screen.getByText(/По запросу «кристаллография» курсы не найдены/)).toBeVisible()
+  expect(await screen.findByText(/По запросу «кристаллография» курсы не найдены/)).toBeVisible()
   expect(screen.queryByRole('heading', { name: 'Интервью с клиентами' })).not.toBeInTheDocument()
 })
 

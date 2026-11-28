@@ -66,28 +66,32 @@ export function recommendCourses(courses: readonly Course[], profile: StudentPro
   return ranked.sort((first, second) => second.score - first.score).map(({ course, reasons }) => ({ course, reasons }))
 }
 
-const commonWords = new Set(['мне', 'есть', 'хочу', 'найди', 'найти', 'курс', 'курсы', 'факультатив', 'факультативы', 'можно', 'нужен', 'нужны', 'что', 'для', 'как', 'чтобы', 'который', 'где', 'про', 'только'])
-const languageWords = new Map<string, Course['language']>([
+const commonWords = new Set([
+  'мне', 'есть', 'хочу', 'найди', 'найти', 'курс', 'курсы', 'факультатив', 'факультативы', 'можно',
+  'нужен', 'нужны', 'что', 'для', 'как', 'чтобы', 'который', 'где', 'про', 'только',
+  'по', 'на', 'до', 'из', 'от', 'за', 'об', 'со', 'ко', 'во', 'не', 'ли',
+])
+export const searchLanguageAliases = new Map<string, Course['language']>([
   ['английский', 'en'], ['английском', 'en'], ['english', 'en'],
   ['русский', 'ru'], ['русском', 'ru'], ['russian', 'ru'],
 ])
 
-function keywords(text: string) {
-  const words = text.toLowerCase().replaceAll('ё', 'е').match(/[\p{L}\p{N}]{3,}/gu) ?? []
-  return [...new Set(words.filter(word => !commonWords.has(word)))]
+export function catalogSearchWords(text: string, minimumLength = 3) {
+  const words = text.toLowerCase().replaceAll('ё', 'е').match(/[\p{L}\p{N}]+/gu) ?? []
+  return [...new Set(words.filter(word => word.length >= minimumLength && !commonWords.has(word)))]
 }
 
 export function searchCourses(courses: readonly Course[], query: string) {
-  const terms = keywords(query)
+  const terms = catalogSearchWords(query)
   if (!terms.length) return []
 
   return courses.filter(course => {
-    const catalogWords = new Set(keywords([
+    const catalogWords = new Set(catalogSearchWords([
       course.title, course.description, course.keywords, formats[course.format], classes[course.classType],
       ...course.skills.map(skill => skills[skill]),
     ].join(' ')))
     return terms.every(term => {
-      const language = languageWords.get(term)
+      const language = searchLanguageAliases.get(term)
       return language ? course.language === language : catalogWords.has(term)
     })
   })
