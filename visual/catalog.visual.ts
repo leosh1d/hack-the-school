@@ -5,9 +5,25 @@ const choose = (page: Page, name: string) => page.getByRole('radio', { name, exa
 const check = (page: Page, name: string) => page.getByRole('checkbox', { name, exact: true }).check()
 
 async function chooseSql(page: Page) {
-  await choose(page, 'Навыки')
+  await check(page, 'Навыки')
   await next(page)
   await check(page, 'SQL')
+  await next(page)
+}
+
+const hoursSlider = (page: Page) => page.getByRole('slider', { name: 'Сколько времени в неделю вы готовы уделять?' })
+
+async function answerConditions(page: Page, { limitToThreeHours, format }: { limitToThreeHours?: boolean; format?: string } = {}) {
+  await next(page)
+  if (limitToThreeHours) {
+    await hoursSlider(page).press('ArrowRight')
+    await hoursSlider(page).press('ArrowRight')
+    await expect(hoursSlider(page)).toHaveAttribute('aria-valuetext', 'До 3 ч')
+  }
+  await next(page)
+  if (format) await choose(page, format)
+  await next(page)
+  await next(page)
   await next(page)
 }
 
@@ -26,32 +42,39 @@ async function expectScreen(page: Page, name: string) {
   expect(screenshot).toMatchSnapshot(name)
 }
 
+async function expectNextNearBottom(page: Page) {
+  const button = page.getByRole('button', { name: 'Дальше' })
+  await expect(button).toBeInViewport({ ratio: 1 })
+  const box = await button.boundingBox()
+  const inset = page.viewportSize()!.height - (box!.y + box!.height)
+  expect(inset).toBeGreaterThanOrEqual(8)
+  expect(inset).toBeLessThanOrEqual(36)
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Факультативы ВШБ', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'По чему подобрать факультативы?', level: 1 })).toBeVisible()
 })
 
-test('анкета подбора', async ({ page }) => {
-  await expect(page.getByRole('heading', { name: 'По чему подобрать факультативы?' })).toBeVisible()
+test('анкета подбора', async ({ page, isMobile }) => {
+  await expect(page.getByRole('checkbox', { name: 'Карьерные интересы' })).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: 'Навыки' })).toBeVisible()
+  await expect(page.getByRole('progressbar', { name: 'Ход анкеты' })).toHaveAttribute('aria-valuetext', /^Шаг 1, \d+%$/)
   await expect(page.getByRole('button', { name: 'Дальше' })).toBeInViewport()
+  await expect(page.getByRole('button', { name: 'Расскажу в чате' })).toBeInViewport()
+  if (isMobile) await expectNextNearBottom(page)
   await expectScreen(page, '01-profile.png')
 })
 
 test('подборка с объяснениями', async ({ page }) => {
-  await choose(page, 'Оба направления')
+  await check(page, 'Карьерные интересы')
+  await check(page, 'Навыки')
   await next(page)
   await check(page, 'Бизнес-аналитика')
   await next(page)
   await check(page, 'SQL')
   await next(page)
-  await choose(page, 'Уточнить условия')
-  await next(page)
-  await next(page)
-  await choose(page, 'До 3 ч')
-  await next(page)
-  await next(page)
-  await next(page)
-  await next(page)
+  await answerConditions(page, { limitToThreeHours: true })
   await skipAcademicProfile(page)
 
   await expect(page.getByRole('heading', { name: 'Ваша подборка' })).toBeVisible()
@@ -63,14 +86,7 @@ test('подборка с объяснениями', async ({ page }) => {
 
 test('поиск без совпадений', async ({ page }) => {
   await chooseSql(page)
-  await choose(page, 'Уточнить условия')
-  await next(page)
-  await next(page)
-  await next(page)
-  await choose(page, 'Очно')
-  await next(page)
-  await next(page)
-  await next(page)
+  await answerConditions(page, { format: 'Очно' })
   await skipAcademicProfile(page)
   await expect(page.getByRole('heading', { name: 'Подходящих курсов пока нет' })).toBeVisible()
 
@@ -82,8 +98,7 @@ test('поиск без совпадений', async ({ page }) => {
 
 test('разбор ответа в самопроверке', async ({ page }) => {
   await chooseSql(page)
-  await choose(page, 'Пропустить условия')
-  await next(page)
+  await answerConditions(page)
   await skipAcademicProfile(page)
   const course = page.getByRole('article', { name: 'Данные для бизнеса' })
 
@@ -94,8 +109,9 @@ test('разбор ответа в самопроверке', async ({ page }) =
   await expectScreen(page, '04-course-quiz.png')
 })
 
-test('промежуточный вопрос о навыках', async ({ page }) => {
-  await choose(page, 'Оба направления')
+test('промежуточный вопрос о навыках', async ({ page, isMobile }) => {
+  await check(page, 'Карьерные интересы')
+  await check(page, 'Навыки')
   await next(page)
   await check(page, 'Бизнес-аналитика')
   await next(page)
@@ -106,5 +122,45 @@ test('промежуточный вопрос о навыках', async ({ page 
   await expect(page.getByRole('checkbox', { name: 'Бизнес-аналитика' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Назад' })).toBeInViewport()
   await expect(page.getByRole('button', { name: 'Дальше' })).toBeInViewport()
+  if (isMobile) await expectNextNearBottom(page)
   await expectScreen(page, '05-survey-skills.png')
+})
+
+test('ответ чата до заполнения анкеты', async ({ page }) => {
+  await page.getByRole('button', { name: 'Расскажу в чате' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Чат по факультативам' })
+  const input = dialog.getByRole('textbox', { name: 'Запрос по каталогу' })
+  await expect(input).toBeFocused()
+  await input.fill('интервью с клиентами')
+  await input.press('Enter')
+
+  const replies = dialog.getByRole('log')
+  await expect(replies.getByText('интервью с клиентами', { exact: true })).toBeVisible()
+  await expect(replies.getByText('Интервью с клиентами', { exact: true })).toBeVisible()
+  await expectScreen(page, '06-course-chat.png')
+})
+
+test('конкретный вопрос об уровне сразу после навыков', async ({ page }) => {
+  await chooseSql(page)
+
+  await expect(page.getByRole('heading', { name: 'Какой у вас уровень подготовки?', level: 1 })).toBeFocused()
+  await expect(page.getByRole('radio', { name: 'Не указывать' })).toBeChecked()
+  await expectScreen(page, '07-survey-level.png')
+})
+
+test('управление нагрузкой и её сохранение после возврата', async ({ page, isMobile }) => {
+  await chooseSql(page)
+  await next(page)
+  const slider = hoursSlider(page)
+  await expect(slider).toHaveAttribute('aria-valuetext', 'Без ограничений')
+  await expect(page.getByRole('progressbar', { name: 'Ход анкеты' })).toHaveAttribute('aria-valuetext', /^Шаг 4, \d+%$/)
+  await slider.press('End')
+  await expect(slider).toHaveAttribute('aria-valuetext', 'До 5 ч')
+  await slider.press('ArrowLeft')
+  await next(page)
+  await page.getByRole('button', { name: 'Назад' }).click()
+  await expect(slider).toHaveAttribute('aria-valuetext', 'До 4 ч')
+  await expect(page.getByText('До 4 ч', { exact: true })).toBeVisible()
+  if (isMobile) await expectNextNearBottom(page)
+  await expectScreen(page, '08-survey-hours.png')
 })
