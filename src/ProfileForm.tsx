@@ -1,7 +1,7 @@
-import { Box, Button, Grid, Heading, Progress, Slider, Stack, Text, chakra } from '@chakra-ui/react'
+import { Box, Button, Grid, Heading, Progress, Stack, Text, chakra } from '@chakra-ui/react'
 import { LazyMotion, domAnimation, useReducedMotion } from 'motion/react'
 import * as m from 'motion/react-m'
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
 import { careers, classes, formats, languages, skills, subjects, type StudentProfile } from './catalog.ts'
 import { CourseChat } from './CourseChat.tsx'
 import { profileForSurvey, surveySteps, type SurveyDecision, type SurveyDraft, type SurveyRoute, type SurveyStep } from './survey.ts'
@@ -117,61 +117,90 @@ function SingleChoice<Key extends string>({ options, selected, onChange, emptyOp
   )
 }
 
+function hourRowHeight(wheel: HTMLDivElement) {
+  return wheel.firstElementChild?.getBoundingClientRect().height ?? 0
+}
+
 function StudyHours({ value, onChange }: { value: number | null; onChange: (hours: number | null) => void }) {
-  const [interacted, setInteracted] = useState(false)
   const reducedMotion = useReducedMotion()
+  const wheelRef = useRef<HTMLDivElement>(null)
   const selection = hours.indexOf(value)
-  const hourLabel = (index: number) => hours[index] === null ? 'Без ограничений' : `До ${hours[index]} ч`
+  const initialSelection = useRef(selection)
+  const optionId = useId()
+
+  useLayoutEffect(() => {
+    const wheel = wheelRef.current
+    if (wheel) wheel.scrollTop = initialSelection.current * hourRowHeight(wheel)
+  }, [])
+
+  function updateSelection(index: number) {
+    if (index !== selection) onChange(hours[index])
+  }
+
+  function choose(index: number) {
+    const wheel = wheelRef.current
+    if (wheel) wheel.scrollTop = index * hourRowHeight(wheel)
+    updateSelection(index)
+  }
+
+  function moveByKey(event: KeyboardEvent<HTMLDivElement>) {
+    const positions: Record<string, number> = {
+      ArrowUp: Math.max(0, selection - 1),
+      ArrowDown: Math.min(hours.length - 1, selection + 1),
+      Home: 0,
+      End: hours.length - 1,
+    }
+    const next = positions[event.key]
+    if (typeof next !== 'number') return
+    event.preventDefault()
+    choose(next)
+  }
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <Slider.Root
-        colorPalette="hse" size="lg" variant="solid" max={hours.length - 1} value={[selection]}
-        onValueChange={({ value: [index] }) => {
-          setInteracted(true)
-          onChange(hours[index])
-        }}
-        getAriaValueText={({ value: index }) => hourLabel(index)}
-        thumbSize={{ width: 48, height: 48 }}
-        layerStyle="catalogSurface" px={{ base: '3', sm: '5' }} py="4"
-      >
-        <Slider.ValueText mx="auto" minH="7" color="hse.fg" fontWeight="bold" fontSize="lg">
-          <Box asChild display="inline-block" key={selection}>
-            <m.span initial={interacted && !reducedMotion ? { opacity: 0.6, y: 4 } : false}
-              animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.18, ease: 'easeOut' }}
-            >
-              {hourLabel(selection)}
-            </m.span>
-          </Box>
-        </Slider.ValueText>
-        <Slider.Control minH="12">
-          <Slider.Track bg="hse.200"><Slider.Range bg="hse.700" /></Slider.Track>
-          <Slider.Thumb index={0} aria-labelledby="survey-question" boxSize="12" bg="transparent"
-            transition="none" _focusVisible={{ ring: '2px', ringColor: 'hse.700' }}
-          >
-            <Slider.Context>
-              {({ dragging }) => (
-                <Box asChild boxSize="7" borderRadius="full" bg="hse.solid" borderWidth="3px" borderColor="white" shadow="sm">
-                  <m.span aria-hidden="true" initial={false} animate={{ scale: dragging && !reducedMotion ? 0.82 : 1 }}
-                    transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 560, damping: 34 }}
-                  />
-                </Box>
-              )}
-            </Slider.Context>
-            <Slider.HiddenInput />
-          </Slider.Thumb>
-          <Slider.MarkerGroup top="calc(50% - 3px)" insetInline="0">
-            {hours.map((hour, index) => (
-              <Slider.Marker key={index} value={index} gap="3" color={selection === index ? 'hse.fg' : 'catalog.muted'}>
-                <Slider.MarkerIndicator />
-                <Slider.MarkerLabel fontWeight={selection === index ? 'bold' : 'medium'} whiteSpace="nowrap">
-                  {hour === null ? '∞' : `${hour} ч`}
-                </Slider.MarkerLabel>
-              </Slider.Marker>
-            ))}
-          </Slider.MarkerGroup>
-        </Slider.Control>
-      </Slider.Root>
+      <Box layerStyle="catalogSurface" position="relative" p="3">
+        <Box
+          aria-hidden="true" position="absolute" insetInline="3" top="50%" translate="0 -50%"
+          h="12" bg="hse.100" borderRadius="md" pointerEvents="none"
+        />
+        <Box
+          ref={wheelRef} role="listbox" tabIndex={0} aria-labelledby="survey-question"
+          aria-activedescendant={`${optionId}-${selection}`}
+          h="36" py="12" position="relative" overflowY="auto" scrollSnapType="y mandatory"
+          scrollBehavior="auto" overscrollBehaviorY="contain" scrollbarWidth="none" borderRadius="md"
+          _focusVisible={{ outline: '2px solid', outlineColor: 'hse.700', outlineOffset: '2px' }}
+          onKeyDown={moveByKey}
+          onScroll={({ currentTarget: wheel }) => {
+            const rowHeight = hourRowHeight(wheel)
+            if (rowHeight > 0) {
+              updateSelection(Math.max(0, Math.min(hours.length - 1, Math.round(wheel.scrollTop / rowHeight))))
+            }
+          }}
+        >
+          {hours.map((hour, index) => {
+            const selected = index === selection
+            return (
+              <Box
+                key={index} id={`${optionId}-${index}`} role="option" aria-selected={selected}
+                display="grid" placeItems="center" h="12" px="2" scrollSnapAlign="center" cursor="pointer"
+                color={selected ? 'hse.fg' : 'catalog.muted'} fontWeight={selected ? 'bold' : 'medium'}
+                fontSize="md" textAlign="center" userSelect="none"
+                _motionSafe={{ transition: 'color 140ms ease-out' }}
+                onClick={() => {
+                  wheelRef.current?.focus({ preventScroll: true })
+                  choose(index)
+                }}
+              >
+                <m.span initial={false} animate={{ scale: reducedMotion || !selected ? 1 : 1.06 }}
+                  transition={{ duration: reducedMotion ? 0 : 0.16, ease: 'easeOut' }}
+                >
+                  {hour === null ? 'Без ограничений' : `До ${hour} ч`}
+                </m.span>
+              </Box>
+            )
+          })}
+        </Box>
+      </Box>
     </LazyMotion>
   )
 }
