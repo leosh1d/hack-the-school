@@ -31,9 +31,25 @@ test('показывает совпадение до дедлайна и иск�
 })
 
 test('возвращает пустую подборку, когда совпадающий курс выходит за рамки анкеты', () => {
-  expect(recommendCourses([research], { ...emptyProfile, careers: ['product'], format: 'campus' }, now)).toEqual([])
+  expect(recommendCourses([research], { ...emptyProfile, careers: ['product'], formats: ['campus'] }, now)).toEqual([])
   expect(recommendCourses([research], { ...emptyProfile, skills: ['research'], maxHours: 1 }, now)).toEqual([])
   expect(recommendCourses([research], { ...emptyProfile, skills: ['sql'] }, now)).toEqual([])
+})
+
+test('фильтрует по одному выбранному условию и сохраняет все совпадения при выборе обоих', () => {
+  const profile = { ...emptyProfile, skills: ['research'] } satisfies typeof emptyProfile
+  const campusLecture = { ...research, id: 'campus-lecture', format: 'campus', classType: 'lecture', language: 'en' } satisfies Course
+  const matches = (preferences: Partial<typeof emptyProfile>) => (
+    recommendCourses([research, campusLecture], { ...profile, ...preferences }, now).map(({ course }) => course.id)
+  )
+
+  expect(matches({})).toEqual(['research', 'campus-lecture'])
+  expect(matches({ formats: ['online'] })).toEqual(['research'])
+  expect(matches({ classTypes: ['lecture'] })).toEqual(['campus-lecture'])
+  expect(matches({ languages: ['ru'] })).toEqual(['research'])
+  expect(matches({
+    formats: ['online', 'campus'], classTypes: ['lecture', 'seminar'], languages: ['ru', 'en'],
+  })).toEqual(['research', 'campus-lecture'])
 })
 
 test.each(['нейросети в бизнесе', 'визуальная культура', 'SQL на английском'])(

@@ -34,8 +34,10 @@ export function CourseChat() {
     >
       <Dialog.Trigger asChild>
         <Button
-          type="button" variant="subtle" colorPalette="gray" size="lg" minH="14" px="4" justifyContent="space-between"
-          borderColor="catalog.border" borderRadius="md" fontWeight="semibold"
+          type="button" variant="outline" colorPalette="hse" size="lg" minH="14" px="4" justifyContent="space-between"
+          bg="catalog.surface" color="catalog.ink" borderColor="catalog.border" borderRadius="md" fontWeight="semibold"
+          _hover={{ bg: 'catalog.surface', borderColor: 'hse.400' }}
+          _active={{ bg: 'hse.100' }}
           _focusVisible={{ outline: '2px solid', outlineColor: 'hse.700', outlineOffset: '2px' }}
           _motionSafe={{ transition: 'scale 140ms, translate 140ms', _active: { scale: '0.99', translate: '0 1px' } }}
         >

@@ -27,13 +27,14 @@ export const levels = { start: 'Начальный', practice: 'Есть пра�
 export const formats = { online: 'Онлайн', campus: 'Очно' } as const
 export const classes = { lecture: 'Лекции', seminar: 'Семинары' } as const
 export const languages = { ru: 'Русский', en: 'Английский' } as const
-export const programs = {
-  management: 'Менеджмент',
-  business: 'Бизнес-информатика',
-  marketing: 'Маркетинг',
-  finance: 'Финансы',
-  other: 'Другая программа',
-} as const
+export type EducationProgram = {
+  id: string
+  title: string
+  campus: string
+  level: string
+  url?: string
+  code?: string
+}
 
 type Career = keyof typeof careers
 type Skill = keyof typeof skills
@@ -42,7 +43,7 @@ type Level = keyof typeof levels
 type Format = keyof typeof formats
 type ClassType = keyof typeof classes
 type Language = keyof typeof languages
-type Program = keyof typeof programs
+type ProgramArea = 'management' | 'business' | 'marketing' | 'finance'
 
 export type StudentProfile = {
   careers: Career[]
@@ -50,16 +51,16 @@ export type StudentProfile = {
   completed: Subject[]
   level: Level | ''
   maxHours: number | null
-  format: Format | ''
-  classType: ClassType | ''
-  language: Language | ''
-  program: Program | ''
+  formats: Format[]
+  classTypes: ClassType[]
+  languages: Language[]
+  program: EducationProgram | null
   year: number | null
 }
 
 export const emptyProfile: StudentProfile = {
   careers: [], skills: [], completed: [], level: '', maxHours: null,
-  format: '', classType: '', language: '', program: '', year: null,
+  formats: [], classTypes: [], languages: [], program: null, year: null,
 }
 
 export type Course = {
@@ -74,7 +75,7 @@ export type Course = {
   classType: ClassType
   language: Language
   prerequisites: readonly Subject[]
-  programs: readonly Program[]
+  programs: readonly ProgramArea[]
   years: readonly number[]
   deadline: string
   capacity: number

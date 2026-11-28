@@ -1,4 +1,4 @@
-import { careers, classes, formats, levels, programs, skills, subjects, type Course, type StudentProfile } from './catalog.ts'
+import { careers, classes, formats, levels, skills, subjects, type Course, type StudentProfile } from './catalog.ts'
 
 export type Recommendation = { course: Course; reasons: string[] }
 
@@ -7,15 +7,25 @@ export function isRegistrationOpen(course: Course, now: Date) {
 }
 
 const levelIndex = { start: 0, practice: 1, advanced: 2 }
+const demoProgramAreas = new Map<string, Course['programs'][number]>([
+  ['Управление бизнесом', 'management'],
+  ['Бизнес-информатика', 'business'],
+  ['Маркетинг', 'marketing'],
+  ['Маркетинг и рыночная аналитика', 'marketing'],
+  ['Финансы', 'finance'],
+  ['Корпоративные финансы', 'finance'],
+])
 
 function matchesPreferences(course: Course, profile: StudentProfile) {
   return (profile.maxHours === null || course.hours <= profile.maxHours)
-    && (!profile.format || course.format === profile.format)
-    && (!profile.classType || course.classType === profile.classType)
-    && (!profile.language || course.language === profile.language)
+    && (!profile.formats.length || profile.formats.includes(course.format))
+    && (!profile.classTypes.length || profile.classTypes.includes(course.classType))
+    && (!profile.languages.length || profile.languages.includes(course.language))
 }
 
 export function recommendCourses(courses: readonly Course[], profile: StudentProfile, now: Date): Recommendation[] {
+  const program = profile.program
+  const programArea = program && demoProgramAreas.get(program.title)
   const ranked = courses.flatMap(course => {
     if (!isRegistrationOpen(course, now) || !matchesPreferences(course, profile)) return []
 
@@ -41,9 +51,9 @@ export function recommendCourses(courses: readonly Course[], profile: StudentPro
     if (completed.length) reasons.push(`Вы уже изучали: ${completed.map(subject => subjects[subject]).join(', ')}`)
     if (missing.length) reasons.push(`Пригодятся основы: ${missing.map(subject => subjects[subject]).join(', ')}`)
 
-    if (profile.program && course.programs.includes(profile.program)) {
+    if (program && programArea && course.programs.includes(programArea)) {
       score += 1
-      reasons.push(`Дополняет программу «${programs[profile.program]}»`)
+      reasons.push(`Дополняет программу «${program.title}»`)
     }
     if (profile.year && course.years.includes(profile.year)) {
       score += 1

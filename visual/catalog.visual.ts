@@ -16,12 +16,12 @@ const hoursSlider = (page: Page) => page.getByRole('slider', { name: 'Сколь
 async function answerConditions(page: Page, { limitToThreeHours, format }: { limitToThreeHours?: boolean; format?: string } = {}) {
   await next(page)
   if (limitToThreeHours) {
-    await hoursSlider(page).press('ArrowRight')
+    await hoursSlider(page).press('Home')
     await hoursSlider(page).press('ArrowRight')
     await expect(hoursSlider(page)).toHaveAttribute('aria-valuetext', 'До 3 ч')
   }
   await next(page)
-  if (format) await choose(page, format)
+  if (format) await check(page, format)
   await next(page)
   await next(page)
   await next(page)
@@ -30,6 +30,12 @@ async function answerConditions(page: Page, { limitToThreeHours, format }: { lim
 async function skipAcademicProfile(page: Page) {
   await choose(page, 'Пропустить профиль')
   await page.getByRole('button', { name: 'Показать подборку' }).click()
+}
+
+async function goToFormat(page: Page) {
+  await chooseSql(page)
+  await next(page)
+  await next(page)
 }
 
 async function expectScreen(page: Page, name: string) {
@@ -140,10 +146,12 @@ test('ответ чата до заполнения анкеты', async ({ page
   await expectScreen(page, '06-course-chat.png')
 })
 
-test('конкретный вопрос об уровне сразу после навыков', async ({ page }) => {
+test('вопрос об опыте в выбранных темах сразу после навыков', async ({ page }) => {
   await chooseSql(page)
 
-  await expect(page.getByRole('heading', { name: 'Какой у вас уровень подготовки?', level: 1 })).toBeFocused()
+  await expect(page.getByRole('heading', { name: 'Какой у вас опыт в выбранных темах?', level: 1 })).toBeFocused()
+  await expect(page.getByText('Ваши темы — SQL.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'Решаю задачи по инструкции или с помощью' })).toBeVisible()
   await expect(page.getByRole('radio', { name: 'Не указывать' })).toBeChecked()
   await expectScreen(page, '07-survey-level.png')
 })
@@ -154,8 +162,11 @@ test('управление нагрузкой и её сохранение по�
   const slider = hoursSlider(page)
   await expect(slider).toHaveAttribute('aria-valuetext', 'Без ограничений')
   await expect(page.getByRole('progressbar', { name: 'Ход анкеты' })).toHaveAttribute('aria-valuetext', /^Шаг 4, \d+%$/)
+  await slider.press('Home')
+  await expect(slider).toHaveAttribute('aria-valuetext', 'До 2 ч')
   await slider.press('End')
-  await expect(slider).toHaveAttribute('aria-valuetext', 'До 5 ч')
+  await expect(slider).toHaveAttribute('aria-valuetext', 'Без ограничений')
+  await slider.press('ArrowLeft')
   await slider.press('ArrowLeft')
   await next(page)
   await page.getByRole('button', { name: 'Назад' }).click()
@@ -163,4 +174,51 @@ test('управление нагрузкой и её сохранение по�
   await expect(page.getByText('До 4 ч', { exact: true })).toBeVisible()
   if (isMobile) await expectNextNearBottom(page)
   await expectScreen(page, '08-survey-hours.png')
+})
+
+test('два формата занятий после возврата', async ({ page }) => {
+  await goToFormat(page)
+  await check(page, 'Онлайн')
+  await check(page, 'Очно')
+  await next(page)
+  await page.getByRole('button', { name: 'Назад' }).click()
+  await expect(page.getByRole('checkbox', { name: 'Онлайн' })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'Очно' })).toBeChecked()
+  await expectScreen(page, '09-survey-format.png')
+})
+
+test('выбор вида занятий', async ({ page }) => {
+  await goToFormat(page)
+  await next(page)
+  await check(page, 'Семинары')
+  await expect(page.getByRole('checkbox', { name: 'Семинары' })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'Лекции' })).not.toBeChecked()
+  await expectScreen(page, '10-survey-class-type.png')
+})
+
+test('выбор языка курса', async ({ page }) => {
+  await goToFormat(page)
+  await next(page)
+  await next(page)
+  await check(page, 'Английский')
+  await expect(page.getByRole('checkbox', { name: 'Английский' })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'Русский' })).not.toBeChecked()
+  await expectScreen(page, '11-survey-language.png')
+})
+
+test('поиск одноимённых программ в разных кампусах', async ({ page }) => {
+  await chooseSql(page)
+  await answerConditions(page)
+  await choose(page, 'Заполнить учебный профиль')
+  await next(page)
+
+  const program = page.getByRole('combobox', { name: 'На какой программе вы учитесь?' })
+  await program.fill('бизнес-информ')
+  const moscow = page.getByRole('option', { name: /^Бизнес-информатика Москва · Бакалавриат$/ })
+  await expect(moscow).toBeVisible()
+  await expect(page.getByRole('option', { name: /^Бизнес-информатика Санкт-Петербург · Бакалавриат$/ })).toBeVisible()
+  await expect(page.getByRole('option', { name: /^Управление бизнесом/ })).toHaveCount(0)
+  await program.press('ArrowDown')
+  await expect(moscow).toHaveAttribute('data-highlighted', '')
+  await expectScreen(page, '12-survey-program.png')
 })

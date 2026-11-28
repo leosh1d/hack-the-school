@@ -1,18 +1,23 @@
-import { Box, Button, Flex, Grid, Heading, Progress, Slider, Stack, Text, chakra } from '@chakra-ui/react'
-import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
-import { careers, classes, formats, languages, levels, programs, skills, subjects, type StudentProfile } from './catalog.ts'
+import { Box, Button, Grid, Heading, Progress, Slider, Stack, Text, chakra } from '@chakra-ui/react'
+import { LazyMotion, domAnimation, useReducedMotion } from 'motion/react'
+import * as m from 'motion/react-m'
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
+import { careers, classes, formats, languages, skills, subjects, type StudentProfile } from './catalog.ts'
 import { CourseChat } from './CourseChat.tsx'
-import { surveySteps, type SurveyDecision, type SurveyDraft, type SurveyRoute, type SurveyStep } from './survey.ts'
+import { profileForSurvey, surveySteps, type SurveyDecision, type SurveyDraft, type SurveyRoute, type SurveyStep } from './survey.ts'
+
+const optionalChoices = 'Отметьте подходящие варианты или пропустите вопрос.'
+const ProgramPicker = lazy(() => import('./ProgramPicker.tsx'))
 
 const questions = {
   route: { title: 'По чему подобрать факультативы?', description: 'Выберите карьерные направления, конкретные навыки или оба варианта.' },
   careers: { title: 'Какие направления вам интересны?', description: 'Выберите хотя бы одно направление.' },
   skills: { title: 'Какие навыки хотите развить?', description: 'Выберите хотя бы один навык.' },
-  level: { title: 'Какой у вас уровень подготовки?' },
+  level: { title: 'Какой у вас опыт в выбранных темах?' },
   maxHours: { title: 'Сколько времени в неделю вы готовы уделять?' },
-  format: { title: 'Какой формат занятий вам подходит?' },
-  classType: { title: 'Какой вид занятий предпочитаете?' },
-  language: { title: 'На каком языке хотите учиться?' },
+  format: { title: 'Какой формат занятий вам подходит?', description: optionalChoices },
+  classType: { title: 'Какой вид занятий предпочитаете?', description: optionalChoices },
+  language: { title: 'На каком языке хотите учиться?', description: optionalChoices },
   academic: { title: 'Учесть ваш учебный профиль?', description: 'Программа, курс и пройденные дисциплины помогут учесть ваш опыт.' },
   program: { title: 'На какой программе вы учитесь?' },
   year: { title: 'На каком курсе вы учитесь?' },
@@ -23,10 +28,28 @@ const routeChoices = {
   careers: 'Карьерные интересы', skills: 'Навыки',
 } satisfies Record<Exclude<SurveyRoute, 'both'>, string>
 
+const experienceChoices = {
+  start: 'Только знакомлюсь с темой',
+  practice: 'Решаю задачи по инструкции или с помощью',
+  advanced: 'Самостоятельно решаю задачи на практике',
+} satisfies Record<Exclude<StudentProfile['level'], ''>, string>
+
 const academicChoices = { yes: 'Заполнить учебный профиль', skip: 'Пропустить профиль' } satisfies Record<SurveyDecision, string>
 
-const hours: readonly (number | null)[] = [null, 2, 3, 4, 5]
-const years = { '1': '1 курс', '2': '2 курс', '3': '3 курс', '4': '4 курс', '5': '5 курс' } as const
+const hours: readonly (number | null)[] = [2, 3, 4, 5, null]
+const years = { '1': '1 курс', '2': '2 курс', '3': '3 курс', '4': '4 курс' } as const
+
+function describeExperience(draft: SurveyDraft) {
+  const activeProfile = profileForSurvey(draft)
+  const topics = [
+    ...activeProfile.careers.map(career => careers[career]),
+    ...activeProfile.skills.map(skill => skills[skill]),
+  ]
+
+  if (topics.length) {
+    return `Ваши темы — ${topics.slice(0, 2).join(', ')}${topics.length > 2 ? ' и другие выбранные темы' : ''}.`
+  }
+}
 
 function Choice({ type, checked, title, onChange, card = false }: {
   type: 'radio' | 'checkbox'
@@ -95,33 +118,61 @@ function SingleChoice<Key extends string>({ options, selected, onChange, emptyOp
 }
 
 function StudyHours({ value, onChange }: { value: number | null; onChange: (hours: number | null) => void }) {
-  const selection = Math.max(0, hours.indexOf(value))
+  const [interacted, setInteracted] = useState(false)
+  const reducedMotion = useReducedMotion()
+  const selection = hours.indexOf(value)
   const hourLabel = (index: number) => hours[index] === null ? 'Без ограничений' : `До ${hours[index]} ч`
 
   return (
-    <Slider.Root
-      colorPalette="hse" size="lg" variant="solid" max={hours.length - 1} value={[selection]}
-      onValueChange={({ value: [index] }) => onChange(hours[index])}
-      getAriaValueText={({ value: index }) => hourLabel(index)}
-      thumbSize={{ width: 48, height: 48 }}
-      layerStyle="catalogSurface" px={{ base: '3', sm: '5' }} py="4"
-    >
-      <Slider.ValueText mx="auto" color="hse.fg" fontWeight="bold" fontSize="lg">{hourLabel(selection)}</Slider.ValueText>
-      <Slider.Control minH="12">
-        <Slider.Track bg="hse.200"><Slider.Range bg="hse.700" /></Slider.Track>
-        <Slider.Thumb index={0} aria-labelledby="survey-question" boxSize="12" bg="transparent"
-          transition="none" _focusVisible={{ ring: '2px', ringColor: 'hse.700' }}
-          _motionSafe={{ transition: 'scale 140ms ease-out', _active: { scale: '0.92' } }}
-        >
-          <Box boxSize="7" borderRadius="full" bg="hse.solid" borderWidth="3px" borderColor="white" shadow="sm" />
-          <Slider.HiddenInput />
-        </Slider.Thumb>
-      </Slider.Control>
-      <Flex justify="space-between" color="catalog.muted" fontSize="sm">
-        <Text>{hourLabel(0)}</Text>
-        <Text>{hourLabel(hours.length - 1)}</Text>
-      </Flex>
-    </Slider.Root>
+    <LazyMotion features={domAnimation} strict>
+      <Slider.Root
+        colorPalette="hse" size="lg" variant="solid" max={hours.length - 1} value={[selection]}
+        onValueChange={({ value: [index] }) => {
+          setInteracted(true)
+          onChange(hours[index])
+        }}
+        getAriaValueText={({ value: index }) => hourLabel(index)}
+        thumbSize={{ width: 48, height: 48 }}
+        layerStyle="catalogSurface" px={{ base: '3', sm: '5' }} py="4"
+      >
+        <Slider.ValueText mx="auto" minH="7" color="hse.fg" fontWeight="bold" fontSize="lg">
+          <Box asChild display="inline-block" key={selection}>
+            <m.span initial={interacted && !reducedMotion ? { opacity: 0.6, y: 4 } : false}
+              animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.18, ease: 'easeOut' }}
+            >
+              {hourLabel(selection)}
+            </m.span>
+          </Box>
+        </Slider.ValueText>
+        <Slider.Control minH="12">
+          <Slider.Track bg="hse.200"><Slider.Range bg="hse.700" /></Slider.Track>
+          <Slider.Thumb index={0} aria-labelledby="survey-question" boxSize="12" bg="transparent"
+            transition="none" _focusVisible={{ ring: '2px', ringColor: 'hse.700' }}
+          >
+            <Slider.Context>
+              {({ dragging }) => (
+                <Box asChild boxSize="7" borderRadius="full" bg="hse.solid" borderWidth="3px" borderColor="white" shadow="sm">
+                  <m.span aria-hidden="true" initial={false} animate={{ scale: dragging && !reducedMotion ? 0.82 : 1 }}
+                    transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 560, damping: 34 }}
+                  />
+                </Box>
+              )}
+            </Slider.Context>
+            <Slider.HiddenInput />
+          </Slider.Thumb>
+          <Slider.MarkerGroup top="calc(50% - 3px)" insetInline="0">
+            {hours.map((hour, index) => (
+              <Slider.Marker key={index} value={index} gap="3" color={selection === index ? 'hse.fg' : 'catalog.muted'}>
+                <Slider.MarkerIndicator />
+                <Slider.MarkerLabel fontWeight={selection === index ? 'bold' : 'medium'} whiteSpace="nowrap">
+                  {hour === null ? '∞' : `${hour} ч`}
+                </Slider.MarkerLabel>
+              </Slider.Marker>
+            ))}
+          </Slider.MarkerGroup>
+        </Slider.Control>
+      </Slider.Root>
+    </LazyMotion>
   )
 }
 
@@ -142,6 +193,7 @@ export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
   const previousStep = steps[stepIndex - 1]
   const showResults = step === 'completed' || (step === 'academic' && draft.academic === 'skip')
   const question: { title: string; description?: string } = questions[step]
+  const description = step === 'level' ? describeExperience(draft) : question.description
   const { profile } = draft
   const selectedRoutes: (keyof typeof routeChoices)[] = draft.route === 'both'
     ? ['careers', 'skills']
@@ -176,6 +228,7 @@ export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
       careers: profile.careers.length ? '' : 'Выберите хотя бы одно направление.',
       skills: profile.skills.length ? '' : 'Выберите хотя бы один навык.',
       academic: draft.academic ? '' : 'Выберите, учитывать ли учебный профиль.',
+      program: profile.program ? '' : 'Выберите программу из списка.',
     }
 
     if (errors[step]) {
@@ -198,13 +251,17 @@ export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
       )
       case 'careers': return <MultipleChoices options={careers} selected={profile.careers} onChange={value => updateProfile('careers', value)} />
       case 'skills': return <MultipleChoices options={skills} selected={profile.skills} onChange={value => updateProfile('skills', value)} />
-      case 'level': return <SingleChoice options={levels} selected={profile.level} onChange={value => updateProfile('level', value)} emptyOption="Не указывать" />
+      case 'level': return <SingleChoice options={experienceChoices} selected={profile.level} onChange={value => updateProfile('level', value)} emptyOption="Не указывать" />
       case 'maxHours': return <StudyHours value={profile.maxHours} onChange={value => updateProfile('maxHours', value)} />
-      case 'format': return <SingleChoice options={formats} selected={profile.format} onChange={value => updateProfile('format', value)} emptyOption="Любой формат" />
-      case 'classType': return <SingleChoice options={classes} selected={profile.classType} onChange={value => updateProfile('classType', value)} emptyOption="Любой вид занятий" />
-      case 'language': return <SingleChoice options={languages} selected={profile.language} onChange={value => updateProfile('language', value)} emptyOption="Любой язык" />
+      case 'format': return <MultipleChoices cards options={formats} selected={profile.formats} onChange={value => updateProfile('formats', value)} />
+      case 'classType': return <MultipleChoices cards options={classes} selected={profile.classTypes} onChange={value => updateProfile('classTypes', value)} />
+      case 'language': return <MultipleChoices cards options={languages} selected={profile.languages} onChange={value => updateProfile('languages', value)} />
       case 'academic': return <SingleChoice options={academicChoices} selected={draft.academic} onChange={academic => update({ academic })} />
-      case 'program': return <SingleChoice options={programs} selected={profile.program} onChange={value => updateProfile('program', value)} emptyOption="Не указывать" />
+      case 'program': return (
+        <Suspense fallback={<Text role="status" color="catalog.muted">Загружаем список программ…</Text>}>
+          <ProgramPicker value={profile.program} invalid={Boolean(error)} onChange={value => updateProfile('program', value)} />
+        </Suspense>
+      )
       case 'year': return <SingleChoice options={years} selected={String(profile.year ?? '')} onChange={value => updateProfile('year', value ? Number(value) : null)} emptyOption="Не указывать" />
       case 'completed': return <MultipleChoices options={subjects} selected={profile.completed} onChange={value => updateProfile('completed', value)} />
     }
@@ -223,15 +280,15 @@ export function ProfileForm({ draft, headingRef, onChange, onSubmit }: {
       <chakra.form key={step} onSubmit={submit} aria-labelledby="survey-question" display="flex" flexDirection="column" flex="1" minH="0">
         <chakra.fieldset
           flex="1" minW="0" minH="0" pb="4" overflowY={{ base: 'auto', md: 'visible' }}
-          aria-labelledby="survey-question" aria-describedby={question.description ? 'survey-description' : undefined}
+          aria-labelledby="survey-question" aria-describedby={description ? 'survey-description' : undefined}
           _motionSafe={{ animationName: 'fade-in, slide-from-bottom', animationDuration: 'fast', animationTimingFunction: 'ease-out' }}
         >
-          <Heading as="h1" id="survey-question" tabIndex={-1} ref={headingRef} size={{ base: 'xl', md: '3xl' }} mb={question.description ? '2' : '5'} _focusVisible={{ outline: 'none' }}>
+          <Heading as="h1" id="survey-question" tabIndex={-1} ref={headingRef} size={{ base: 'xl', md: '3xl' }} mb={description ? '2' : '5'} _focusVisible={{ outline: 'none' }}>
             {question.title}
           </Heading>
-          {question.description && <Text color="catalog.muted" id="survey-description" mb="5" fontSize="sm">{question.description}</Text>}
+          {description && <Text color="catalog.muted" id="survey-description" mb="5" fontSize="sm">{description}</Text>}
           {renderChoices()}
-          {error && <Text role="alert" color="gsb.fg" fontSize="sm" mt="3">{error}</Text>}
+          {error && <Text id="survey-error" role="alert" color="gsb.fg" fontSize="sm" mt="3">{error}</Text>}
         </chakra.fieldset>
 
         <Grid
